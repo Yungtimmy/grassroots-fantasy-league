@@ -1,0 +1,17 @@
+[
+  {"id":"seed_appearance","event":"APPEARANCE","position":null,"points":2,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"2 pts for 60+ minutes, 1 pt otherwise"},
+  {"id":"seed_goal_gk","event":"GOAL","position":"GK","points":10,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Goal scored by goalkeeper"},
+  {"id":"seed_goal_def","event":"GOAL","position":"DEF","points":6,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Goal scored by defender"},
+  {"id":"seed_goal_mid","event":"GOAL","position":"MID","points":5,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Goal scored by midfielder"},
+  {"id":"seed_goal_fwd","event":"GOAL","position":"FWD","points":4,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Goal scored by forward"},
+  {"id":"seed_assist","event":"ASSIST","position":null,"points":3,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Goal assist"},
+  {"id":"seed_cs_gk","event":"CLEAN_SHEET","position":"GK","points":5,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Clean sheet (GK)"},
+  {"id":"seed_cs_def","event":"CLEAN_SHEET","position":"DEF","points":4,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Clean sheet (DEF)"},
+  {"id":"seed_cs_mid","event":"CLEAN_SHEET","position":"MID","points":1,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Clean sheet (MID)"},
+  {"id":"seed_save","event":"SAVE","position":"GK","points":1,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Goalkeeper save"},
+  {"id":"seed_pen_save","event":"PENALTY_SAVE","position":"GK","points":5,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Penalty save"},
+  {"id":"seed_yellow","event":"YELLOW_CARD","position":null,"points":-1,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Yellow card"},
+  {"id":"seed_red","event":"RED_CARD","position":null,"points":-3,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Red card"},
+  {"id":"seed_own","event":"OWN_GOAL","position":null,"points":-2,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Own goal"},
+  {"id":"seed_pen_miss","event":"PENALTY_MISS","position":null,"points":-2,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Penalty miss"}
+]

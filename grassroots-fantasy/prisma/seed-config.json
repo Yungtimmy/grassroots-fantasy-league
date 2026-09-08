@@ -1,0 +1,11 @@
+[
+  {"id":"cfg_platform_name","key":"platform_name","updated_at":"2026-09-08T13:00:00.000Z","value":"Grassroots Fantasy League"},
+  {"id":"cfg_tagline","key":"platform_tagline","updated_at":"2026-09-08T13:00:00.000Z","value":"Represent your university. Compete nationally."},
+  {"id":"cfg_formation","key":"default_formation","updated_at":"2026-09-08T13:00:00.000Z","value":"4-4-2"},
+  {"id":"cfg_xi","key":"starting_xi_size","updated_at":"2026-09-08T13:00:00.000Z","value":"11"},
+  {"id":"cfg_bench","key":"bench_size","updated_at":"2026-09-08T13:00:00.000Z","value":"5"},
+  {"id":"cfg_squad","key":"squad_size","updated_at":"2026-09-08T13:00:00.000Z","value":"16"},
+  {"id":"cfg_cap","key":"captain_multiplier","updated_at":"2026-09-08T13:00:00.000Z","value":"2"},
+  {"id":"cfg_fee","key":"registration_fee","updated_at":"2026-09-08T13:00:00.000Z","value":"500"},
+  {"id":"cfg_budget","key":"budget","updated_at":"2026-09-08T13:00:00.000Z","value":"1000"}
+]

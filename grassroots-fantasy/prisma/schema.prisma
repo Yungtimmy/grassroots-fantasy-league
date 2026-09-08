@@ -1,0 +1,330 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  avatar       String?
+  role         String   @default("user")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  leagueMemberships UniversityLeagueMember[]
+  fantasyTeams      FantasyTeam[]
+  payments          Payment[]
+  pointTransactions FantasyPointTransaction[]
+
+  @@map("users")
+}
+
+model University {
+  id        String   @id @default(cuid())
+  name      String
+  shortName String   @map("short_name")
+  slug      String   @unique
+  logo      String?
+  state     String?
+  country   String   @default("Nigeria")
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  leagues UniversityLeague[]
+
+  @@map("universities")
+}
+
+model Season {
+  id                String   @id @default(cuid())
+  name              String
+  year              Int
+  startDate         DateTime @map("start_date")
+  endDate           DateTime @map("end_date")
+  registrationStart DateTime @map("registration_start")
+  registrationEnd   DateTime @map("registration_end")
+  registrationFee   Int      @default(500)
+  status            String   @default("upcoming")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  leagues   UniversityLeague[]
+  gameweeks Gameweek[]
+
+  @@map("seasons")
+}
+
+model UniversityLeague {
+  id           String   @id @default(cuid())
+  universityId String   @map("university_id")
+  seasonId     String   @map("season_id")
+  status       String   @default("open")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  university University               @relation(fields: [universityId], references: [id])
+  season     Season                   @relation(fields: [seasonId], references: [id])
+  members    UniversityLeagueMember[]
+  teams      FantasyTeam[]
+
+  @@unique([universityId, seasonId])
+  @@index([universityId])
+  @@index([seasonId])
+  @@map("university_leagues")
+}
+
+model UniversityLeagueMember {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  leagueId     String   @map("league_id")
+  registeredAt DateTime @default(now()) @map("registered_at")
+  status       String   @default("active")
+
+  user   User             @relation(fields: [userId], references: [id])
+  league UniversityLeague @relation(fields: [leagueId], references: [id])
+
+  @@unique([userId, leagueId])
+  @@index([userId])
+  @@index([leagueId])
+  @@map("university_league_members")
+}
+
+model FantasyTeam {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  leagueId    String   @map("league_id")
+  name        String
+  formation   String   @default("4-4-2")
+  budget      Int      @default(1000)
+  usedBudget  Int      @default(0) @map("used_budget")
+  totalPoints Int      @default(0) @map("total_points")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user    User                @relation(fields: [userId], references: [id])
+  league  UniversityLeague    @relation(fields: [leagueId], references: [id])
+  players FantasyTeamPlayer[]
+
+  @@unique([userId, leagueId])
+  @@index([userId])
+  @@index([leagueId])
+  @@map("fantasy_teams")
+}
+
+model FantasyTeamPlayer {
+  id            String   @id @default(cuid())
+  teamId        String   @map("team_id")
+  playerId      String   @map("player_id")
+  isCaptain     Boolean  @default(false) @map("is_captain")
+  isViceCaptain Boolean  @default(false) @map("is_vice_captain")
+  isStarting    Boolean  @default(true) @map("is_starting")
+  position      String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  team   FantasyTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player RealPlayer  @relation(fields: [playerId], references: [id], onDelete: Restrict)
+
+  @@unique([teamId, playerId])
+  @@index([teamId])
+  @@index([playerId])
+  @@map("fantasy_team_players")
+}
+
+model RealTeam {
+  id        String   @id @default(cuid())
+  name      String
+  shortName String   @map("short_name")
+  logo      String?
+  country   String   @default("England")
+  league    String   @default("Premier League")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  players     RealPlayer[]
+  homeMatches Match[]      @relation("HomeTeam")
+  awayMatches Match[]      @relation("AwayTeam")
+
+  @@map("real_teams")
+}
+
+model RealPlayer {
+  id          String   @id @default(cuid())
+  name        String
+  photo       String?
+  position    String
+  realTeamId  String   @map("real_team_id")
+  price       Int
+  status      String   @default("active")
+  totalPoints Int      @default(0) @map("total_points")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  realTeam           RealTeam                  @relation(fields: [realTeamId], references: [id])
+  fantasyTeamPlayers FantasyTeamPlayer[]
+  matchStats         PlayerMatchStatistic[]
+  pointTransactions  FantasyPointTransaction[]
+
+  @@index([realTeamId])
+  @@index([position])
+  @@map("real_players")
+}
+
+model ScoringRule {
+  id          String   @id @default(cuid())
+  event       String
+  position    String?
+  points      Int
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([event, position])
+  @@map("scoring_rules")
+}
+
+model Gameweek {
+  id        String   @id @default(cuid())
+  seasonId  String   @map("season_id")
+  number    Int
+  name      String
+  deadline  DateTime
+  startDate DateTime @map("start_date")
+  endDate   DateTime @map("end_date")
+  status    String   @default("upcoming")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  season            Season                    @relation(fields: [seasonId], references: [id])
+  matches           Match[]
+  pointTransactions FantasyPointTransaction[]
+
+  @@unique([seasonId, number])
+  @@index([seasonId])
+  @@map("gameweeks")
+}
+
+model Match {
+  id         String   @id @default(cuid())
+  gameweekId String   @map("gameweek_id")
+  homeTeamId String   @map("home_team_id")
+  awayTeamId String   @map("away_team_id")
+  homeScore  Int?     @map("home_score")
+  awayScore  Int?     @map("away_score")
+  date       DateTime
+  time       String?
+  venue      String?
+  status     String   @default("upcoming")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  gameweek    Gameweek               @relation(fields: [gameweekId], references: [id])
+  homeTeam    RealTeam               @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam    RealTeam               @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  playerStats PlayerMatchStatistic[]
+
+  @@index([gameweekId])
+  @@index([homeTeamId])
+  @@index([awayTeamId])
+  @@index([date])
+  @@map("matches")
+}
+
+model PlayerMatchStatistic {
+  id          String   @id @default(cuid())
+  playerId    String   @map("player_id")
+  matchId     String   @map("match_id")
+  minutes     Int      @default(0)
+  goals       Int      @default(0)
+  assists     Int      @default(0)
+  cleanSheet  Boolean  @default(false) @map("clean_sheet")
+  saves       Int      @default(0)
+  yellowCards Int      @default(0) @map("yellow_cards")
+  redCards    Int      @default(0) @map("red_cards")
+  ownGoals    Int      @default(0) @map("own_goals")
+  penaltyMiss Int      @default(0) @map("penalty_miss")
+  penaltySave Int      @default(0) @map("penalty_save")
+  goalsConceded Int    @default(0) @map("goals_conceded")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  player RealPlayer @relation(fields: [playerId], references: [id])
+  match  Match      @relation(fields: [matchId], references: [id])
+
+  @@unique([playerId, matchId])
+  @@index([playerId])
+  @@index([matchId])
+  @@map("player_match_statistics")
+}
+
+model FantasyPointTransaction {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  playerId    String   @map("player_id")
+  gameweekId  String   @map("gameweek_id")
+  eventType   String   @map("event_type")
+  basePoints  Int      @map("base_points")
+  multiplier  Int      @default(1)
+  totalPoints Int      @map("total_points")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user     User       @relation(fields: [userId], references: [id])
+  player   RealPlayer @relation(fields: [playerId], references: [id])
+  gameweek Gameweek   @relation(fields: [gameweekId], references: [id])
+
+  @@unique([userId, playerId, gameweekId])
+  @@index([userId])
+  @@index([playerId])
+  @@index([gameweekId])
+  @@map("fantasy_point_transactions")
+}
+
+model Payment {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  amount       Int
+  currency     String    @default("NGN")
+  reference    String    @unique
+  provider     String?
+  status       String    @default("pending")
+  seasonId     String?   @map("season_id")
+  universityId String?   @map("university_id")
+  metadata     String?
+  verifiedAt   DateTime? @map("verified_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([seasonId])
+  @@index([universityId])
+  @@map("payments")
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  icon        String?
+  category    String
+  criteria    String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("achievements")
+}
+
+model AppConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_config")
+}

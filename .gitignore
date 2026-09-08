@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next
+.next/
+out/
+dist/
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+
+# prisma / local db
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# logs / cache
+*.log
+dev.log
+tsconfig.tsbuildinfo
+.turbo
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
