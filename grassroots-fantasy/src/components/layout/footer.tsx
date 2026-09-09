@@ -12,10 +12,8 @@ export function Footer() {
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           {/* Brand */}
           <div className="md:col-span-1">
-            <span className="bg-gradient-to-r from-brand-400 to-accent-500 bg-clip-text text-xl font-bold text-transparent">
-              GFL
-            </span>
-            <p className="mt-2 text-sm text-gray-500">Built for university football fans</p>
+            <img src="/logo.png" alt="GFL" className="h-10 w-auto mb-2" />
+            <p className="text-sm text-gray-500">Built for university football fans</p>
             <a
               href="https://chat.whatsapp.com/GSKeSlgJmDoKAhnM0yfxZY?mode=gi_t"
               target="_blank"

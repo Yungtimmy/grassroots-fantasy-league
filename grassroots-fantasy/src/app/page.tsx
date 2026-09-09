@@ -33,24 +33,32 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative overflow-hidden dark:bg-black bg-white">
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-brand-400/20 blur-3xl" />
-          <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-accent-500/20 blur-3xl" />
+      <section className="relative overflow-hidden bg-black min-h-screen flex items-center">
+        {/* Background Image - visible on left side */}
+        <div className="absolute inset-0">
+          <img 
+            src="/bg.jpg" 
+            alt="" 
+            className="h-full w-full object-cover object-left opacity-40"
+          />
+          {/* Dark overlay gradient - heavier on right, lighter on left */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/70 to-black/95" />
+          {/* Additional darkening from top and bottom */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80" />
         </div>
 
         <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8 lg:py-40">
           <div className="mx-auto max-w-3xl text-center">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-400/10 px-4 py-1.5 text-sm font-medium text-brand-400 dark:text-brand-400">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-400/10 px-4 py-1.5 text-sm font-medium text-brand-400">
               Grassroots Fantasy League
             </div>
-            <h1 className="font-display text-5xl font-bold tracking-tight sm:text-6xl lg:text-7xl dark:text-white text-gray-900">
+            <h1 className="font-display text-5xl font-bold tracking-tight sm:text-6xl lg:text-7xl text-white">
               REPRESENT YOUR{" "}
               <span className="bg-gradient-to-r from-brand-400 to-accent-500 bg-clip-text text-transparent">
                 UNIVERSITY
               </span>
             </h1>
-            <p className="mt-6 text-lg leading-relaxed dark:text-gray-400 text-gray-600 sm:text-xl">
+            <p className="mt-6 text-lg leading-relaxed text-gray-400 sm:text-xl">
               Build a fantasy football squad, compete against classmates, and climb the national
               Grassroots table — all while repping your school.
             </p>
@@ -63,7 +71,7 @@ export default async function HomePage() {
               </Link>
               <Link
                 href="/auth/login"
-                className="inline-flex h-12 items-center gap-2 rounded-xl border dark:border-gray-700 border-gray-300 px-7 text-sm font-semibold dark:text-gray-300 text-gray-700 transition-all dark:hover:border-gray-500 hover:border-gray-400 dark:hover:bg-gray-800 hover:bg-gray-100"
+                className="inline-flex h-12 items-center gap-2 rounded-xl border border-gray-700 px-7 text-sm font-semibold text-gray-300 transition-all hover:border-gray-500 hover:bg-gray-800"
               >
                 Sign in
               </Link>

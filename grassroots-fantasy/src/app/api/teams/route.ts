@@ -141,6 +141,16 @@ async function saveTeam(request: NextRequest, isUpdate: boolean) {
 
     const leagueId = ctx.leagueId;
 
+    const activeGameweek = await prisma.gameweek.findFirst({
+      where: { seasonId: ctx.seasonId, status: "active" },
+    });
+    if (activeGameweek) {
+      return NextResponse.json(
+        { success: false, error: "Squad is locked. A gameweek is currently active. You can edit your squad after it finishes." },
+        { status: 403 }
+      );
+    }
+
     if (players) {
       const squadError = validateSquad(players);
       if (squadError) {

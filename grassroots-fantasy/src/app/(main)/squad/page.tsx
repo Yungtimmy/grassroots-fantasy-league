@@ -105,6 +105,8 @@ export default function SquadPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [activeSlot, setActiveSlot] = useState<{ area: "start" | "sub"; index: number } | null>(null);
+  const [gameweekLocked, setGameweekLocked] = useState(false);
+  const [activeGwNumber, setActiveGwNumber] = useState<number | null>(null);
 
   const squad = useMemo(() => [...starters, ...subs], [starters, subs]);
   const usedBudget = squad.reduce((sum, s) => sum + (s.player?.price ?? 0), 0);
@@ -113,6 +115,7 @@ export default function SquadPage() {
   const playerCount = squad.filter((s) => s.player).length;
 
   function changeFormation(nextFormation: string) {
+    if (gameweekLocked) return;
     const next = emptyStarting(nextFormation);
     const pool = starters.filter((s) => s.player).map((s) => s.player!);
     for (const slot of next) {
@@ -132,11 +135,25 @@ export default function SquadPage() {
   }
 
   function clearAll() {
+    if (gameweekLocked) return;
     setStarters(emptyStarting(formation));
     setSubs(emptySubs());
     setError("");
     setSuccess("");
   }
+
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/user/dashboard")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.nextGameweek?.status === "active") {
+          setGameweekLocked(true);
+          setActiveGwNumber(data.nextGameweek.number);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -215,6 +232,7 @@ export default function SquadPage() {
   }, [fetchMarket]);
 
   function placePlayer(player: MarketPlayer) {
+    if (gameweekLocked) return;
     if (selectedIds.has(player.id)) return;
     if (remaining < player.price) {
       setError("Not enough budget for this player.");
@@ -254,6 +272,7 @@ export default function SquadPage() {
   }
 
   function removeFrom(area: "start" | "sub", index: number) {
+    if (gameweekLocked) return;
     if (area === "start") {
       const next = [...starters];
       next[index] = { ...next[index], player: null, isCaptain: false, isViceCaptain: false };
@@ -266,6 +285,7 @@ export default function SquadPage() {
   }
 
   function setCaptain(area: "start" | "sub", index: number) {
+    if (gameweekLocked) return;
     if (area === "sub") return;
     setStarters((prev) =>
       prev.map((s, i) => ({
@@ -277,6 +297,7 @@ export default function SquadPage() {
   }
 
   function setVice(area: "start" | "sub", index: number) {
+    if (gameweekLocked) return;
     if (area === "sub") return;
     setStarters((prev) =>
       prev.map((s, i) => ({
@@ -346,6 +367,21 @@ export default function SquadPage() {
       </div>
 
       <div className="mx-auto max-w-lg px-4 py-4">
+        {/* Gameweek Locked Banner */}
+        {gameweekLocked && (
+          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <div>
+                <p className="text-sm font-semibold text-red-400">Squad Locked</p>
+                <p className="text-xs text-red-400/70">Gameweek {activeGwNumber} is active. You can edit your squad after it finishes.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Budget & Controls */}
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -367,17 +403,18 @@ export default function SquadPage() {
           <select
             value={formation}
             onChange={(e) => changeFormation(e.target.value)}
-            className="flex-1 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 px-3 py-2.5 text-sm text-surface-900 dark:text-white"
+            disabled={gameweekLocked}
+            className="flex-1 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 px-3 py-2.5 text-sm text-surface-900 dark:text-white disabled:opacity-50"
           >
             {Object.keys(FORMATIONS).map((f) => (
               <option key={f} value={f}>{f}</option>
             ))}
           </select>
-          <Button variant="outline" size="sm" onClick={clearAll}>
+          <Button variant="outline" size="sm" onClick={clearAll} disabled={gameweekLocked}>
             Clear
           </Button>
-          <Button variant="primary" size="sm" loading={saving} onClick={saveSquad}>
-            Save Team
+          <Button variant="primary" size="sm" loading={saving} onClick={saveSquad} disabled={gameweekLocked}>
+            {gameweekLocked ? "Locked" : "Save Team"}
           </Button>
         </div>
 

@@ -41,7 +41,7 @@ export async function GET() {
         formation: "4-4-2",
         teamPlayers: [],
         nextGameweek: nextGameweek
-          ? { number: nextGameweek.number, deadline: nextGameweek.deadline.toISOString(), startDate: nextGameweek.startDate.toISOString() }
+          ? { number: nextGameweek.number, deadline: nextGameweek.deadline.toISOString(), startDate: nextGameweek.startDate.toISOString(), status: nextGameweek.status }
           : null,
         leagues: [],
         nearbyPlayers: [],
@@ -171,7 +171,7 @@ export async function GET() {
           points: p.player.totalPoints,
         })) ?? [],
       nextGameweek: nextGameweek
-        ? { number: nextGameweek.number, deadline: nextGameweek.deadline.toISOString(), startDate: nextGameweek.startDate.toISOString() }
+        ? { number: nextGameweek.number, deadline: nextGameweek.deadline.toISOString(), startDate: nextGameweek.startDate.toISOString(), status: nextGameweek.status }
         : null,
       leagues,
       nearbyPlayers,

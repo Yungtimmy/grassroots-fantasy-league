@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "./auth-provider";
-import { Button } from "@/components/ui/button";
+
 
 const signedInLinks = [
   { href: "/dashboard", label: "Home" },
@@ -60,14 +60,7 @@ export function Navbar() {
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden md:block">
         <nav className="flex items-center gap-1 rounded-2xl border border-white/20 dark:border-white/10 bg-white/60 dark:bg-black/40 px-2 py-1.5 shadow-xl shadow-black/5 backdrop-blur-xl">
           <Link href={homeHref} className="flex items-center gap-2 px-4 py-1.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500">
-              <svg className="h-4 w-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" />
-              </svg>
-            </div>
-            <span className="bg-gradient-to-r from-brand-400 to-brand-600 bg-clip-text text-lg font-bold text-transparent">
-              GFL
-            </span>
+            <img src="/logo.png" alt="GFL" className="h-8 w-auto" />
           </Link>
 
           <div className="mx-1 h-5 w-px bg-surface-300 dark:bg-surface-600" />
@@ -147,14 +140,7 @@ export function Navbar() {
       <div className="fixed top-4 left-4 right-4 z-50 md:hidden">
         <nav className="flex items-center justify-between rounded-2xl border border-white/20 dark:border-white/10 bg-white/60 dark:bg-black/40 px-3 py-2 shadow-xl shadow-black/5 backdrop-blur-xl">
           <Link href={homeHref} className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500">
-              <svg className="h-4 w-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" />
-              </svg>
-            </div>
-            <span className="bg-gradient-to-r from-brand-400 to-brand-600 bg-clip-text text-lg font-bold text-transparent">
-              GFL
-            </span>
+            <img src="/logo.png" alt="GFL" className="h-7 w-auto" />
           </Link>
 
           <div className="flex items-center gap-2">
@@ -185,14 +171,7 @@ export function Navbar() {
               className="flex items-center gap-2"
               onClick={() => setMobileOpen(false)}
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-500">
-                <svg className="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" />
-                </svg>
-              </div>
-              <span className="bg-gradient-to-r from-brand-400 to-brand-600 bg-clip-text text-2xl font-bold text-transparent">
-                GFL
-              </span>
+              <img src="/logo.png" alt="GFL" className="h-8 w-auto" />
             </Link>
             <button
               onClick={() => setMobileOpen(false)}
