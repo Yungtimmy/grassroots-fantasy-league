@@ -25,8 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${outfit.variable}`}>
-      <body className="min-h-screen bg-surface-950 font-body text-surface-100 antialiased">
+    <html lang="en" className={`dark ${inter.variable} ${outfit.variable}`} suppressHydrationWarning>
+      <body className="min-h-screen font-body antialiased bg-black text-white">
         <AppChrome>{children}</AppChrome>
       </body>
     </html>

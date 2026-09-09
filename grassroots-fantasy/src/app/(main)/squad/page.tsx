@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/components/layout/auth-provider";
 import { FANTASY_BUDGET, formatFantasyPrice, getPositionColor } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface MarketPlayer {
   id: string;
@@ -10,6 +13,7 @@ interface MarketPlayer {
   position: string;
   price: number;
   totalPoints: number;
+  photo?: string | null;
   realTeam: { id: string; name: string; shortName: string };
 }
 
@@ -56,12 +60,36 @@ function emptySubs(): Slot[] {
 
 function groupStarting(slots: Slot[]) {
   const rows: { label: string; items: Slot[] }[] = [
-    { label: "GK", items: slots.filter((s) => s.position === "GK") },
-    { label: "DEF", items: slots.filter((s) => s.position === "DEF") },
-    { label: "MID", items: slots.filter((s) => s.position === "MID") },
     { label: "FWD", items: slots.filter((s) => s.position === "FWD") },
+    { label: "MID", items: slots.filter((s) => s.position === "MID") },
+    { label: "DEF", items: slots.filter((s) => s.position === "DEF") },
+    { label: "GK", items: slots.filter((s) => s.position === "GK") },
   ];
   return rows.filter((r) => r.items.length > 0);
+}
+
+function PlayerAvatar({ player, size = "md" }: { player: MarketPlayer | null; size?: "sm" | "md" | "lg" }) {
+  const sizeClasses = {
+    sm: "h-8 w-8 text-[10px]",
+    md: "h-12 w-12 text-sm",
+    lg: "h-16 w-16 text-lg",
+  };
+
+  if (!player) {
+    return (
+      <div className={`${sizeClasses[size]} flex items-center justify-center rounded-full bg-surface-200 dark:bg-surface-700`}>
+        <svg className="h-1/2 w-1/2 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${sizeClasses[size]} flex items-center justify-center rounded-full bg-brand-500/20 font-bold text-brand-600 dark:text-brand-400`}>
+      {player.name.charAt(0)}
+    </div>
+  );
 }
 
 export default function SquadPage() {
@@ -82,6 +110,7 @@ export default function SquadPage() {
   const usedBudget = squad.reduce((sum, s) => sum + (s.player?.price ?? 0), 0);
   const remaining = FANTASY_BUDGET - usedBudget;
   const selectedIds = new Set(squad.filter((s) => s.player).map((s) => s.player!.id));
+  const playerCount = squad.filter((s) => s.player).length;
 
   function changeFormation(nextFormation: string) {
     const next = emptyStarting(nextFormation);
@@ -100,6 +129,13 @@ export default function SquadPage() {
     setFormation(nextFormation);
     setStarters(next);
     setSubs(nextSubs);
+  }
+
+  function clearAll() {
+    setStarters(emptyStarting(formation));
+    setSubs(emptySubs());
+    setError("");
+    setSuccess("");
   }
 
   useEffect(() => {
@@ -122,6 +158,7 @@ export default function SquadPage() {
             position: tp.player.position,
             price: tp.player.price,
             totalPoints: tp.player.totalPoints,
+            photo: tp.player.photo,
             realTeam: tp.player.realTeam,
           };
           const idx = startingSlots.findIndex((s) => s.position === player.position && !s.player);
@@ -145,6 +182,7 @@ export default function SquadPage() {
               position: tp.player.position,
               price: tp.player.price,
               totalPoints: tp.player.totalPoints,
+              photo: tp.player.photo,
               realTeam: tp.player.realTeam,
             },
             isCaptain: tp.isCaptain,
@@ -227,7 +265,8 @@ export default function SquadPage() {
     }
   }
 
-  function setCaptain(index: number) {
+  function setCaptain(area: "start" | "sub", index: number) {
+    if (area === "sub") return;
     setStarters((prev) =>
       prev.map((s, i) => ({
         ...s,
@@ -235,22 +274,15 @@ export default function SquadPage() {
         isViceCaptain: i === index ? false : s.isViceCaptain,
       }))
     );
-    setSubs((prev) => prev.map((s) => ({ ...s, isCaptain: false })));
   }
 
-  function setVice(index: number, area: "start" | "sub") {
+  function setVice(area: "start" | "sub", index: number) {
+    if (area === "sub") return;
     setStarters((prev) =>
       prev.map((s, i) => ({
         ...s,
-        isViceCaptain: area === "start" && i === index,
-        isCaptain: area === "start" && i === index ? false : s.isCaptain,
-      }))
-    );
-    setSubs((prev) =>
-      prev.map((s, i) => ({
-        ...s,
-        isViceCaptain: area === "sub" && i === index,
-        isCaptain: false,
+        isViceCaptain: i === index,
+        isCaptain: i === index ? false : s.isCaptain,
       }))
     );
   }
@@ -269,9 +301,8 @@ export default function SquadPage() {
     setSuccess("");
     setSaving(true);
     try {
-      const method = "POST";
       const res = await fetch("/api/teams", {
-        method,
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           formation,
@@ -296,202 +327,163 @@ export default function SquadPage() {
     }
   }
 
-  function SlotCard({
-    slot,
-    area,
-    index,
-  }: {
-    slot: Slot;
-    area: "start" | "sub";
-    index: number;
-  }) {
-    const selected = activeSlot?.area === area && activeSlot.index === index;
-    return (
-      <button
-        type="button"
-        onClick={() => setActiveSlot(selected ? null : { area, index })}
-        className={`relative w-[92px] rounded-xl border px-2 py-2 text-center transition-colors ${
-          selected
-            ? "border-brand-400 bg-brand-500/20"
-            : slot.player
-              ? "border-surface-600 bg-surface-900/80"
-              : "border-dashed border-surface-600 bg-surface-900/40"
-        }`}
-      >
-        <div className={`mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold ${getPositionColor(slot.player?.position || slot.position)}`}>
-          {slot.player ? slot.player.name.charAt(0) : slot.position === "SUB" ? "+" : slot.position}
-        </div>
-        <p className="truncate text-[11px] font-medium text-surface-100">
-          {slot.player ? slot.player.name.split(" ").slice(-1)[0] : "Empty"}
-        </p>
-        <p className="text-[10px] text-surface-500">
-          {slot.player ? formatFantasyPrice(slot.player.price) : slot.position}
-        </p>
-        {slot.player && (
-          <div className="mt-1 flex justify-center gap-1">
-            {area === "start" && (
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCaptain(index);
-                }}
-                className={`rounded px-1 text-[9px] font-bold ${slot.isCaptain ? "bg-yellow-400 text-black" : "bg-surface-700 text-surface-400"}`}
-              >
-                C
-              </span>
-            )}
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                setVice(index, area);
-              }}
-              className={`rounded px-1 text-[9px] font-bold ${slot.isViceCaptain ? "bg-sky-400 text-black" : "bg-surface-700 text-surface-400"}`}
-            >
-              V
-            </span>
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                removeFrom(area, index);
-              }}
-              className="rounded bg-surface-700 px-1 text-[9px] text-red-400"
-            >
-              ×
+  return (
+    <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
+      {/* Header */}
+      <div className="sticky top-0 z-10 border-b border-surface-200 dark:border-surface-800 bg-white/80 dark:bg-surface-950/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-lg items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" className="text-surface-500 hover:text-surface-700 dark:hover:text-surface-300">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <span className="font-display text-sm font-semibold text-surface-900 dark:text-white">
+              My Team
             </span>
           </div>
-        )}
-      </button>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Squad</h1>
-          <p className="mt-1 text-surface-400">Pick 11 starters and 5 substitutes.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+      </div>
+
+      <div className="mx-auto max-w-lg px-4 py-4">
+        {/* Budget & Controls */}
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] uppercase text-surface-500">Budget</p>
+            <p className="font-display text-lg font-bold text-surface-900 dark:text-white">
+              {formatFantasyPrice(remaining)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] uppercase text-surface-500">Remaining</p>
+            <p className="font-display text-lg font-bold text-brand-500">
+              {formatFantasyPrice(remaining)}
+            </p>
+          </div>
+        </div>
+
+        {/* Formation & Actions */}
+        <div className="mb-4 flex items-center gap-2">
           <select
             value={formation}
             onChange={(e) => changeFormation(e.target.value)}
-            className="h-10 rounded-lg border border-surface-600 bg-surface-900 px-3 text-sm"
+            className="flex-1 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 px-3 py-2.5 text-sm text-surface-900 dark:text-white"
           >
             {Object.keys(FORMATIONS).map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
+              <option key={f} value={f}>{f}</option>
             ))}
           </select>
-          <button
-            onClick={saveSquad}
-            disabled={saving}
-            className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save squad"}
-          </button>
+          <Button variant="outline" size="sm" onClick={clearAll}>
+            Clear
+          </Button>
+          <Button variant="primary" size="sm" loading={saving} onClick={saveSquad}>
+            Save Team
+          </Button>
         </div>
-      </div>
 
-      {/* Budget bar */}
-      <div className="rounded-xl border border-surface-700 bg-surface-900 p-4">
-        <div className="mb-2 flex items-center justify-between text-sm">
-          <span className="text-surface-400">Budget</span>
-          <span className={remaining < 0 ? "font-bold text-red-400" : "font-bold text-brand-400"}>
-            {formatFantasyPrice(remaining)} remaining
-          </span>
-        </div>
-        <div className="h-3 overflow-hidden rounded-full bg-surface-700">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${
-              remaining < 0
-                ? "bg-red-500"
-                : remaining < 100
-                  ? "bg-yellow-400"
-                  : "bg-brand-500"
-            }`}
-            style={{ width: `${Math.min(100, Math.max(0, (usedBudget / FANTASY_BUDGET) * 100))}%` }}
-          />
-        </div>
-        <div className="mt-1 flex justify-between text-xs text-surface-500">
-          <span>Spent: {formatFantasyPrice(usedBudget)}</span>
-          <span>Budget: 100.0m</span>
-        </div>
-      </div>
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="mb-4 rounded-xl border border-brand-200 dark:border-brand-500/30 bg-brand-50 dark:bg-brand-500/10 px-4 py-3 text-sm text-brand-600 dark:text-brand-400">
+            {success}
+          </div>
+        )}
 
-      {error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>
-      )}
-      {success && (
-        <div className="rounded-lg border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm text-brand-400">
-          {success}
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        <div className="space-y-4">
-          <div
-            className="relative rounded-3xl border border-pitch-700/40 bg-surface-950 p-6 bg-cover bg-center"
-            style={{ backgroundImage: "url('/pitch.jpg'), linear-gradient(to bottom, #0a3d0a, #062006)" }}
-          >
-            <div className="absolute inset-0 rounded-3xl bg-black/30" />
-            <div className="relative">
-              <p className="mb-4 text-center text-xs font-semibold uppercase tracking-widest text-pitch-300">
-                Starting 11 · {formation}
-              </p>
-            <div className="space-y-5">
+        {/* Pitch */}
+        <div
+          className="relative rounded-2xl border border-surface-200 dark:border-surface-700/40 bg-green-600 p-4 bg-cover bg-center overflow-hidden"
+          style={{ backgroundImage: "url('/pitch.jpg'), linear-gradient(to bottom, #16a34a, #15803c)" }}
+        >
+          <div className="absolute inset-0 bg-green-600/80" />
+          <div className="relative">
+            <p className="mb-4 text-center text-[10px] font-bold uppercase tracking-widest text-white/80">
+              Starting 11 · {formation}
+            </p>
+            <div className="space-y-4">
               {groupStarting(starters).map((row) => (
-                <div key={row.label} className="flex flex-wrap justify-center gap-3">
+                <div key={row.label} className="flex justify-center gap-2">
                   {row.items.map((slot) => {
                     const index = starters.indexOf(slot);
-                    return <SlotCard key={`s-${index}`} slot={slot} area="start" index={index} />;
+                    return (
+                      <PlayerSlot
+                        key={`s-${index}`}
+                        slot={slot}
+                        area="start"
+                        index={index}
+                        active={activeSlot?.area === "start" && activeSlot.index === index}
+                        onSelect={() => setActiveSlot(activeSlot?.area === "start" && activeSlot.index === index ? null : { area: "start", index })}
+                        onCaptain={() => setCaptain("start", index)}
+                        onVice={() => setVice("start", index)}
+                        onRemove={() => removeFrom("start", index)}
+                      />
+                    );
                   })}
                 </div>
               ))}
             </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-surface-800 bg-surface-900 p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-surface-400">
-              Substitutes (5)
-            </p>
-            <div className="flex flex-wrap gap-3">
-              {subs.map((slot, i) => (
-                <SlotCard key={`b-${i}`} slot={slot} area="sub" index={i} />
-              ))}
-            </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-surface-800 bg-surface-900 p-4">
-          <h2 className="mb-3 font-semibold">Player market</h2>
+        {/* Substitutes */}
+        <div className="mt-4 rounded-2xl border border-surface-200 dark:border-surface-700/50 bg-white dark:bg-surface-800/80 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase text-surface-500">
+              Substitutes · {subs.filter((s) => s.player).length}/5
+            </p>
+            <p className="text-xs text-surface-400">Bench</p>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {subs.map((slot, i) => (
+              <PlayerSlot
+                key={`b-${i}`}
+                slot={slot}
+                area="sub"
+                index={i}
+                active={activeSlot?.area === "sub" && activeSlot.index === i}
+                onSelect={() => setActiveSlot(activeSlot?.area === "sub" && activeSlot.index === i ? null : { area: "sub", index: i })}
+                onCaptain={() => {}}
+                onVice={() => {}}
+                onRemove={() => removeFrom("sub", i)}
+                compact
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Player Market */}
+        <div className="mt-4 rounded-2xl border border-surface-200 dark:border-surface-700/50 bg-white dark:bg-surface-800/80 p-4">
+          <h2 className="mb-3 font-display text-sm font-semibold text-surface-900 dark:text-white">
+            Player Market
+          </h2>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name..."
-            className="mb-3 h-10 w-full rounded-lg border border-surface-700 bg-surface-950 px-3 text-sm"
+            placeholder="Search players..."
+            className="mb-3 w-full rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900 px-4 py-2.5 text-sm text-surface-900 dark:text-white placeholder-surface-400 focus:border-brand-500 focus:outline-none"
           />
-          <div className="mb-3 flex flex-wrap gap-1">
+          <div className="mb-3 flex gap-1.5">
             {["ALL", "GK", "DEF", "MID", "FWD"].map((p) => (
               <button
                 key={p}
                 onClick={() => setPosFilter(p)}
-                className={`rounded-md px-2 py-1 text-xs font-semibold ${
-                  posFilter === p ? "bg-brand-500 text-white" : "bg-surface-800 text-surface-400"
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  posFilter === p
+                    ? "bg-brand-500 text-white"
+                    : "bg-surface-100 dark:bg-surface-700 text-surface-600 dark:text-surface-400"
                 }`}
               >
                 {p}
               </button>
             ))}
           </div>
-          <div className="max-h-[640px] space-y-2 overflow-y-auto pr-1">
+          <div className="max-h-[500px] space-y-2 overflow-y-auto pr-1">
             {marketLoading ? (
-              <p className="py-8 text-center text-sm text-surface-500">Loading players...</p>
+              <p className="py-8 text-center text-sm text-surface-400">Loading players...</p>
             ) : market.length === 0 ? (
-              <p className="py-8 text-center text-sm text-surface-500">
-                No players yet. An admin needs to add clubs and players first.
-              </p>
+              <p className="py-8 text-center text-sm text-surface-400">No players found.</p>
             ) : (
               market.map((player) => {
                 const taken = selectedIds.has(player.id);
@@ -501,16 +493,15 @@ export default function SquadPage() {
                     type="button"
                     disabled={taken}
                     onClick={() => placePlayer(player)}
-                    className="flex w-full items-center gap-3 rounded-xl border border-surface-800 bg-surface-950 px-3 py-2 text-left hover:border-brand-500/40 disabled:opacity-40"
+                    className="flex w-full items-center gap-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900/50 px-3 py-2.5 text-left transition-colors hover:border-brand-500/30 disabled:opacity-40"
                   >
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${getPositionColor(player.position)}`}>
-                      {player.position}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{player.name}</span>
-                      <span className="block text-xs text-surface-500">{player.realTeam.shortName}</span>
-                    </span>
-                    <span className="text-sm font-semibold text-brand-400">{formatFantasyPrice(player.price)}</span>
+                    <PlayerAvatar player={player} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-surface-900 dark:text-white">{player.name}</p>
+                      <p className="text-[10px] text-surface-500">{player.realTeam.shortName}</p>
+                    </div>
+                    <Badge variant={player.position as any} className="text-[10px]">{player.position}</Badge>
+                    <span className="text-xs font-semibold text-brand-500">{formatFantasyPrice(player.price)}</span>
                   </button>
                 );
               })
@@ -518,6 +509,103 @@ export default function SquadPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PlayerSlot({
+  slot,
+  area,
+  index,
+  active,
+  onSelect,
+  onCaptain,
+  onVice,
+  onRemove,
+  compact = false,
+}: {
+  slot: Slot;
+  area: "start" | "sub";
+  index: number;
+  active: boolean;
+  onSelect: () => void;
+  onCaptain: () => void;
+  onVice: () => void;
+  onRemove: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      onClick={onSelect}
+      className={`relative flex flex-col items-center rounded-xl border p-2 transition-all cursor-pointer ${
+        active
+          ? "border-brand-500 bg-brand-500/10 shadow-lg shadow-brand-500/10"
+          : slot.player
+            ? "border-surface-200 dark:border-surface-600 bg-white dark:bg-surface-800/80"
+            : "border-dashed border-surface-300 dark:border-surface-600 bg-surface-100 dark:bg-surface-800/40"
+      } ${compact ? "w-[60px]" : "w-[72px]"}`}
+    >
+      {slot.isCaptain && (
+        <div className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-yellow-400 text-[8px] font-bold text-black z-10">
+          C
+        </div>
+      )}
+      {slot.isViceCaptain && (
+        <div className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-sky-400 text-[8px] font-bold text-black z-10">
+          V
+        </div>
+      )}
+
+      <div className={`flex items-center justify-center rounded-full ${compact ? "h-8 w-8" : "h-10 w-10"} ${
+        slot.player
+          ? "bg-brand-500/20 text-brand-600 dark:text-brand-400 font-bold"
+          : "bg-surface-200 dark:bg-surface-700 text-surface-400"
+      }`}>
+        {slot.player ? (
+          <span className={compact ? "text-xs" : "text-sm"}>{slot.player.name.charAt(0)}</span>
+        ) : (
+          <svg className={compact ? "h-3 w-3" : "h-4 w-4"} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+        )}
+      </div>
+
+      <p className={`mt-1 truncate text-center font-medium text-surface-900 dark:text-white ${compact ? "w-full text-[9px]" : "text-[10px]"}`}>
+        {slot.player ? slot.player.name.split(" ").pop() : slot.position === "SUB" ? "Bench" : slot.position}
+      </p>
+
+      {slot.player && (
+        <p className={`text-surface-500 ${compact ? "text-[8px]" : "text-[9px]"}`}>
+          {formatFantasyPrice(slot.player.price)}
+        </p>
+      )}
+
+      {active && slot.player && (
+        <div className="mt-1 flex gap-0.5">
+          {area === "start" && !slot.isCaptain && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCaptain(); }}
+              className="rounded bg-yellow-400 px-1 py-0.5 text-[8px] font-bold text-black"
+            >
+              C
+            </button>
+          )}
+          {area === "start" && !slot.isViceCaptain && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onVice(); }}
+              className="rounded bg-sky-400 px-1 py-0.5 text-[8px] font-bold text-black"
+            >
+              V
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="rounded bg-red-500 px-1 py-0.5 text-[8px] font-bold text-white"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

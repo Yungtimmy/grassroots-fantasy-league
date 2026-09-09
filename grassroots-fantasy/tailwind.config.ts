@@ -1,21 +1,35 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
         brand: {
-          50: '#eefbf4',
-          100: '#d6f5e3',
-          200: '#b0eacc',
-          300: '#7dd9ae',
-          400: '#48c28b',
-          500: '#26a771',
-          600: '#1a875b',
-          700: '#156c4a',
-          800: '#13563c',
-          900: '#114733',
-          950: '#09281d',
+          50: '#f6ffe0',
+          100: '#eaffb3',
+          200: '#dfff80',
+          300: '#d4ff4d',
+          400: '#cdf22b',
+          500: '#b8d926',
+          600: '#96b01e',
+          700: '#748718',
+          800: '#5d6c14',
+          900: '#4a5612',
+          950: '#2a3008',
+        },
+        accent: {
+          50: '#eef3ff',
+          100: '#dde8ff',
+          200: '#c3d4ff',
+          300: '#9eb5ff',
+          400: '#6b8aff',
+          500: '#1E45FB',
+          600: '#1a3ad0',
+          700: '#152ea6',
+          800: '#112582',
+          900: '#0e1f6a',
+          950: '#0a1444',
         },
         pitch: {
           50: '#f0fdf5',
@@ -52,7 +66,8 @@ module.exports = {
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'pitch-gradient': 'linear-gradient(180deg, #14532d 0%, #166534 50%, #15803c 100%)',
-        'hero-gradient': 'linear-gradient(135deg, #0f172a 0%, #09281d 50%, #114733 100%)',
+        'hero-gradient-light': 'linear-gradient(135deg, #ffffff 0%, #f6ffe0 50%, #eaffb3 100%)',
+        'hero-gradient-dark': 'linear-gradient(135deg, #000000 0%, #0a1a00 50%, #1a3000 100%)',
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',
@@ -60,12 +75,14 @@ module.exports = {
         'slide-down': 'slideDown 0.3s ease-out',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'glow': 'glow 2s ease-in-out infinite alternate',
+        'marquee': 'marquee 30s linear infinite',
       },
       keyframes: {
         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
         slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
         slideDown: { '0%': { opacity: '0', transform: 'translateY(-10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
-        glow: { '0%': { boxShadow: '0 0 5px rgba(38,167,113,0.2)' }, '100%': { boxShadow: '0 0 20px rgba(38,167,113,0.4)' } },
+        glow: { '0%': { boxShadow: '0 0 5px rgba(205,242,43,0.2)' }, '100%': { boxShadow: '0 0 20px rgba(205,242,43,0.4)' } },
+        marquee: { '0%': { transform: 'translateX(0)' }, '100%': { transform: 'translateX(-50%)' } },
       },
     },
   },

@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { hashPassword, createToken, setAuthCookie } from "@/lib/auth";
-import { ensureUniversityLeague } from "@/lib/league";
+import { createToken, setAuthCookie } from "@/lib/auth";
+import { ensureUniversityLeague, getCurrentSeason } from "@/lib/league";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, username, password, universityId } = body;
+    const { name, email, username, universityId, facultyId, departmentId } = body;
 
-    if (!name || !email || !username || !password || !universityId) {
+    console.log("Registration attempt:", { name, email, username, universityId });
+
+    if (!name || !email || !username || !universityId) {
       return NextResponse.json(
-        { success: false, error: "All fields are required, including university" },
+        { success: false, error: "Name, email, username, and university are required" },
         { status: 400 }
       );
     }
@@ -19,13 +21,6 @@ export async function POST(request: NextRequest) {
     if (!emailRegex.test(email)) {
       return NextResponse.json(
         { success: false, error: "Invalid email format" },
-        { status: 400 }
-      );
-    }
-
-    if (password.length < 8) {
-      return NextResponse.json(
-        { success: false, error: "Password must be at least 8 characters" },
         { status: 400 }
       );
     }
@@ -56,31 +51,63 @@ export async function POST(request: NextRequest) {
     }
 
     const university = await prisma.university.findUnique({ where: { id: universityId } });
-    if (!university || university.status !== "active") {
+    if (!university) {
       return NextResponse.json(
         { success: false, error: "University not found" },
         { status: 404 }
       );
     }
 
+    if (university.status !== "active") {
+      await prisma.university.update({
+        where: { id: universityId },
+        data: { status: "active" },
+      });
+    }
+
+    let season = await getCurrentSeason();
+    if (!season) {
+      const now = new Date();
+      season = await prisma.season.create({
+        data: {
+          name: "2026 Season",
+          year: 2026,
+          startDate: new Date("2026-01-01"),
+          endDate: new Date("2026-12-31"),
+          registrationStart: new Date("2026-01-01"),
+          registrationEnd: new Date("2026-12-31"),
+          registrationFee: 5000,
+          status: "active",
+        },
+      });
+      console.log("Created new season:", season.id);
+    }
+
     const league = await ensureUniversityLeague(universityId);
     if (!league) {
       return NextResponse.json(
-        { success: false, error: "No season is open for registration yet. Ask an admin to create a season." },
-        { status: 400 }
+        { success: false, error: "Could not create league. Please try again." },
+        { status: 500 }
       );
     }
 
-    const passwordHash = await hashPassword(password);
-
     const user = await prisma.user.create({
-      data: { name, email, username, passwordHash },
+      data: {
+        name,
+        email,
+        username,
+        passwordHash: "google-oauth",
+        facultyId: facultyId || null,
+        departmentId: departmentId || null,
+      },
       select: {
         id: true,
         email: true,
         username: true,
         name: true,
         role: true,
+        facultyId: true,
+        departmentId: true,
         createdAt: true,
       },
     });
@@ -96,6 +123,8 @@ export async function POST(request: NextRequest) {
     });
     await setAuthCookie(token);
 
+    console.log("Registration successful:", user.id);
+
     return NextResponse.json(
       { success: true, data: { user, token } },
       { status: 201 }
@@ -103,7 +132,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json(
-      { success: false, error: "Internal server error" },
+      { success: false, error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

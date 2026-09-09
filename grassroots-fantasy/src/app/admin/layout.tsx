@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/admin", icon: "📊" },
+  { label: "Leagues", href: "/admin/leagues", icon: "🏆" },
   { label: "Universities", href: "/admin/universities", icon: "🏫" },
   { label: "Seasons", href: "/admin/seasons", icon: "📅" },
   { label: "Clubs", href: "/admin/clubs", icon: "🛡️" },

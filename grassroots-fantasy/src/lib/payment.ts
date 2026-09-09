@@ -151,7 +151,8 @@ export class PaymentService {
     amount: number,
     seasonId: string,
     universityId: string,
-    email: string
+    email: string,
+    leagueId?: string
   ) {
     const reference = `GFL-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
     const provider = createPaymentProvider();
@@ -160,7 +161,7 @@ export class PaymentService {
       amount,
       email,
       reference,
-      { userId, seasonId, universityId }
+      { userId, seasonId, universityId, leagueId }
     );
 
     await prisma.payment.create({
@@ -171,6 +172,7 @@ export class PaymentService {
         status: "pending",
         seasonId,
         universityId,
+        metadata: leagueId ? JSON.stringify({ leagueId }) : undefined,
       },
     });
 
@@ -197,8 +199,17 @@ export class PaymentService {
       },
     });
 
-    // Enroll user in their university league
-    if (payment.seasonId && payment.universityId) {
+    // Enroll user in league (supports both leagueId-based and season+university-based)
+    let leagueId: string | undefined;
+
+    if (payment.metadata) {
+      try {
+        const meta = JSON.parse(payment.metadata);
+        leagueId = meta.leagueId;
+      } catch {}
+    }
+
+    if (!leagueId && payment.seasonId && payment.universityId) {
       const league = await prisma.universityLeague.findUnique({
         where: {
           universityId_seasonId: {
@@ -207,22 +218,23 @@ export class PaymentService {
           },
         },
       });
+      leagueId = league?.id;
+    }
 
-      if (league) {
-        await prisma.universityLeagueMember.upsert({
-          where: {
-            userId_leagueId: {
-              userId: payment.userId,
-              leagueId: league.id,
-            },
-          },
-          create: {
+    if (leagueId) {
+      await prisma.universityLeagueMember.upsert({
+        where: {
+          userId_leagueId: {
             userId: payment.userId,
-            leagueId: league.id,
+            leagueId,
           },
-          update: {},
-        });
-      }
+        },
+        create: {
+          userId: payment.userId,
+          leagueId,
+        },
+        update: {},
+      });
     }
 
     return { success: true, payment };

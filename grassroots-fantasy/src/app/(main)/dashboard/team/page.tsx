@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/components/layout/auth-provider"
 
@@ -33,16 +32,9 @@ const formationLayout: Record<string, number[]> = {
 
 export default function TeamPage() {
   const { user, loading: authLoading } = useAuth()
-  const router = useRouter()
   const [team, setTeam] = useState<TeamData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/auth/login")
-    }
-  }, [authLoading, user, router])
 
   useEffect(() => {
     if (user) {

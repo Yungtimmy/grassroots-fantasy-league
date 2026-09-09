@@ -1,12 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/components/layout/auth-provider"
 
 interface DashboardData {
+  authenticated: boolean
+  user?: { name: string; email: string } | null
   points: number
+  gameweekPoints: number
   universityRank: number
   grassrootsRank: number
   universityName: string
@@ -19,39 +21,77 @@ interface DashboardData {
   nextGameweek: {
     number: number
     deadline: string
+    startDate: string
   } | null
+  leagues: Array<{
+    id: string
+    name: string
+    university: { name: string; shortName: string; slug: string }
+    memberCount: number
+  }>
+  nearbyPlayers: Array<{
+    rank: number
+    name: string
+    points: number
+    isYou: boolean
+  }>
+  rankChange?: number
+}
+
+function CountdownTimer({ deadline }: { deadline: string }) {
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+
+  useEffect(() => {
+    function calculate() {
+      const diff = new Date(deadline).getTime() - Date.now()
+      if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 }
+      return {
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((diff / (1000 * 60)) % 60),
+        seconds: Math.floor((diff / 1000) % 60),
+      }
+    }
+    setTimeLeft(calculate())
+    const timer = setInterval(() => setTimeLeft(calculate()), 1000)
+    return () => clearInterval(timer)
+  }, [deadline])
+
+  return (
+    <div className="flex gap-1.5">
+      {[
+        { value: timeLeft.days, label: "D" },
+        { value: timeLeft.hours, label: "H" },
+        { value: timeLeft.minutes, label: "M" },
+        { value: timeLeft.seconds, label: "S" },
+      ].map((item) => (
+        <div key={item.label} className="text-center">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 text-xs font-bold">
+            {String(item.value).padStart(2, "0")}
+          </div>
+          <p className="mt-0.5 text-[8px] uppercase text-white/60">{item.label}</p>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default function DashboardPage() {
-  const { user, loading: authLoading } = useAuth()
-  const router = useRouter()
+  const { user } = useAuth()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/auth/login")
-    }
-  }, [authLoading, user, router])
+    fetch("/api/user/dashboard")
+      .then((res) => res.json())
+      .then((d) => {
+        if (!d.error) setData(d)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
-  useEffect(() => {
-    if (user) {
-      fetch("/api/user/dashboard")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.error) {
-            setError(data.error)
-          } else {
-            setData(data)
-          }
-        })
-        .catch(() => setError("Failed to load dashboard data"))
-        .finally(() => setLoading(false))
-    }
-  }, [user])
-
-  if (authLoading || !user) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
@@ -59,133 +99,216 @@ export default function DashboardPage() {
     )
   }
 
+  const rankChange = data?.rankChange ?? 0
+
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">
-          Welcome back, {user.name?.split(" ")[0] || "Player"}
-        </h1>
-        <p className="mt-2 text-surface-400">{data?.universityName || "Your Dashboard"}</p>
-      </div>
-
-      {error && (
-        <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-          {error}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="rounded-xl bg-surface-900 border border-surface-800 p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <svg className="h-5 w-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-            <span className="text-sm text-surface-400">Total Points</span>
+    <div className="min-h-screen bg-black">
+      {/* Header */}
+      <div className="sticky top-0 z-10 border-b border-white/10 bg-black/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-lg items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500">
+              <svg className="h-4 w-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+              </svg>
+            </div>
+            <span className="font-display text-lg font-bold text-white">
+              Grassroots Fantasy
+            </span>
           </div>
-          <p className="text-3xl font-bold text-white">
-            {loading ? "—" : data?.points ?? 0}
-          </p>
-        </div>
-        <div className="rounded-xl bg-surface-900 border border-surface-800 p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <svg className="h-5 w-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-            <span className="text-sm text-surface-400">University Rank</span>
-          </div>
-          <p className="text-3xl font-bold text-white">
-            #{loading ? "—" : data?.universityRank ?? "—"}
-          </p>
-        </div>
-        <div className="rounded-xl bg-surface-900 border border-surface-800 p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <svg className="h-5 w-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            <span className="text-sm text-surface-400">Grassroots Rank</span>
-          </div>
-          <p className="text-3xl font-bold text-white">
-            #{loading ? "—" : data?.grassrootsRank ?? "—"}
-          </p>
-        </div>
-      </div>
-
-      {data?.nextGameweek && (
-        <div className="rounded-xl bg-brand-500/10 border border-brand-500/30 p-6 mb-8">
-          <div className="flex items-center gap-3">
-            <svg className="h-5 w-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-            <div>
-              <p className="text-sm text-brand-300">Next Gameweek: {data.nextGameweek.number}</p>
-              <p className="text-xs text-brand-400/70">
-                Deadline: {new Date(data.nextGameweek.deadline).toLocaleString()}
-              </p>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-400">{user?.name?.split(" ")[0]}</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">
+              {user?.name?.charAt(0)?.toUpperCase() || "U"}
             </div>
           </div>
         </div>
-      )}
-
-      <div className="rounded-xl bg-surface-900 border border-surface-800 p-6 mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Your Team</h2>
-          {data?.formation && (
-            <span className="rounded-md bg-surface-800 px-3 py-1 text-xs font-mono text-surface-300">
-              {data.formation}
-            </span>
-          )}
-        </div>
-        {data?.teamPlayers && data.teamPlayers.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {data.teamPlayers.map((player, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-lg bg-surface-800 p-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-700 text-xs font-medium">
-                  {player.position}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{player.name}</p>
-                  <p className="text-xs text-surface-400">{player.points} pts</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-surface-400 mb-4">You haven&apos;t created your team yet.</p>
-            <Link
-              href="/squad"
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-              Build Your Team
-            </Link>
-          </div>
-        )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Link
-          href="/squad"
-          className="flex items-center gap-3 rounded-xl bg-surface-900 border border-surface-800 p-5 hover:border-brand-500/50 transition-all"
-        >
-          <svg className="h-5 w-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-          <div>
-            <p className="text-sm font-semibold">Edit Team</p>
-            <p className="text-xs text-surface-400">Manage your squad</p>
+      <div className="mx-auto max-w-lg px-4 py-6">
+        {/* Main Card */}
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+          {/* Gameweek Header */}
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-display text-lg font-bold text-white">
+                  Gameweek {data?.nextGameweek?.number ?? "—"}
+                </span>
+                <span className="flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+                  LIVE
+                </span>
+              </div>
+              {data?.nextGameweek && (
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {new Date(data.nextGameweek.startDate).toLocaleDateString("en-NG", {
+                    month: "short",
+                    day: "numeric",
+                  })}{" "}
+                  –{" "}
+                  {new Date(data.nextGameweek.deadline).toLocaleDateString("en-NG", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </p>
+              )}
+            </div>
+            {data?.nextGameweek && (
+              <CountdownTimer deadline={data.nextGameweek.deadline} />
+            )}
           </div>
-        </Link>
-        <Link
-          href="/leaderboard"
-          className="flex items-center gap-3 rounded-xl bg-surface-900 border border-surface-800 p-5 hover:border-brand-500/50 transition-all"
-        >
-          <svg className="h-5 w-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
-          <div>
-            <p className="text-sm font-semibold">Leaderboard</p>
-            <p className="text-xs text-surface-400">See rankings</p>
+
+          {/* Divider */}
+          <div className="h-px bg-white/10 mb-5" />
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-3 gap-4 mb-5">
+            <div className="text-center">
+              <p className="text-[10px] uppercase text-gray-500 mb-1">GW Points</p>
+              <p className="font-display text-2xl font-bold text-brand-400">
+                {data?.gameweekPoints ?? 0}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] uppercase text-gray-500 mb-1">Overall</p>
+              <p className="font-display text-2xl font-bold text-white">
+                {data?.points ?? 0}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] uppercase text-gray-500 mb-1">Rank</p>
+              <p className="font-display text-2xl font-bold text-white">
+                #{data?.universityRank ?? "—"}
+              </p>
+            </div>
           </div>
-        </Link>
-        <Link
-          href="/fixtures"
-          className="flex items-center gap-3 rounded-xl bg-surface-900 border border-surface-800 p-5 hover:border-brand-500/50 transition-all"
-        >
-          <svg className="h-5 w-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-          <div>
-            <p className="text-sm font-semibold">Fixtures</p>
-            <p className="text-xs text-surface-400">View matches</p>
+
+          {/* Rank Change */}
+          {rankChange !== 0 && (
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-white/5 px-4 py-2.5">
+              {rankChange > 0 ? (
+                <>
+                  <svg className="h-4 w-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                  <span className="text-sm text-green-400 font-medium">Up by {rankChange}</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                  <span className="text-sm text-red-400 font-medium">Down by {Math.abs(rankChange)}</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* My Squad */}
+        <div className="mt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-base font-semibold text-white">My Squad</h2>
+            <Link href="/squad" className="flex items-center gap-1 text-xs font-medium text-brand-400 hover:text-brand-300">
+              View Squad
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
           </div>
-        </Link>
+          <div className="grid grid-cols-5 gap-2">
+            {["GK", "DEF", "MID", "MID", "FWD"].map((pos, i) => {
+              const player = data?.teamPlayers?.find((p) => p.position === pos)
+              return (
+                <div
+                  key={`${pos}-${i}`}
+                  className="aspect-square flex flex-col items-center justify-center bg-white/5 border border-white/10"
+                >
+                  {player ? (
+                    <>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/20 text-[10px] font-bold text-brand-400">
+                        {player.name.split(" ").pop()?.charAt(0) || pos.charAt(0)}
+                      </div>
+                      <span className="mt-1 text-[8px] text-gray-500 text-center leading-tight truncate w-full px-1">
+                        {player.name.split(" ").pop() || pos}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs font-bold text-gray-600">{pos}</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Leaderboard Preview */}
+        <div className="mt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-base font-semibold text-white">Leaderboard Preview</h2>
+            <Link href="/leaderboard" className="flex items-center gap-1 text-xs font-medium text-brand-400 hover:text-brand-300">
+              View All
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+            {data?.nearbyPlayers && data.nearbyPlayers.length > 0 ? (
+              <>
+                {/* User's rank at top */}
+                {(() => {
+                  const you = data.nearbyPlayers.find((p) => p.isYou)
+                  if (!you) return null
+                  return (
+                    <div className="flex items-center gap-3 px-4 py-3 bg-brand-500/10 border-b border-white/10">
+                      <span className="w-6 text-center text-xs font-bold text-brand-400">
+                        {you.rank}
+                      </span>
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-500 text-[10px] font-bold text-white">
+                        {you.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-brand-400 truncate">{you.name} (You)</p>
+                      </div>
+                      <span className="text-sm font-bold text-white">{you.points}</span>
+                      <span className="text-[10px] text-gray-500">pts</span>
+                    </div>
+                  )
+                })()}
+
+                {/* Ranks below */}
+                {data.nearbyPlayers
+                  .filter((p) => !p.isYou)
+                  .slice(0, 4)
+                  .map((player) => (
+                    <div
+                      key={player.rank}
+                      className="flex items-center gap-3 px-4 py-2.5 border-b border-white/5 last:border-0"
+                    >
+                      <span className="w-6 text-center text-xs font-medium text-gray-500">
+                        {player.rank}
+                      </span>
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-gray-400">
+                        {player.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-300 truncate">{player.name}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-white">{player.points}</span>
+                      <span className="text-[10px] text-gray-500">pts</span>
+                    </div>
+                  ))}
+              </>
+            ) : (
+              <div className="px-4 py-8 text-center">
+                <p className="text-sm text-gray-500">No leaderboard data yet</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

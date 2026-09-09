@@ -11,7 +11,7 @@ const items = [
     href: "/dashboard",
     label: "Home",
     icon: (active: boolean) => (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -23,9 +23,9 @@ const items = [
   },
   {
     href: "/squad",
-    label: "Squad",
+    label: "My Team",
     icon: (active: boolean) => (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -39,21 +39,21 @@ const items = [
     href: "/fixtures",
     label: "Fixtures",
     icon: (active: boolean) => (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth={active ? 2 : 1.5}
-          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+          d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
         />
       </svg>
     ),
   },
   {
     href: "/leaderboard",
-    label: "Table",
+    label: "Leaderboard",
     icon: (active: boolean) => (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -67,7 +67,7 @@ const items = [
     href: "/dashboard/profile",
     label: "Profile",
     icon: (active: boolean) => (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -86,8 +86,8 @@ export function MobileNav() {
   if (loading || !user) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-surface-800 bg-surface-900/95 backdrop-blur-xl md:hidden safe-area-bottom">
-      <div className="flex items-center justify-around py-2">
+    <div className="fixed bottom-4 left-4 right-4 z-50 md:hidden safe-area-bottom">
+      <nav className="flex items-center justify-around rounded-2xl border border-white/20 dark:border-white/10 bg-white/60 dark:bg-black/40 px-2 py-2 shadow-xl shadow-black/5 backdrop-blur-xl">
         {items.map((item) => {
           const isActive =
             pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -96,8 +96,10 @@ export function MobileNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center gap-1 rounded-lg px-3 py-1.5 transition-colors",
-                isActive ? "text-brand-400" : "text-surface-500 hover:text-surface-300"
+                "flex flex-col items-center gap-1 rounded-xl px-3 py-2 transition-all",
+                isActive
+                  ? "bg-brand-500 text-white shadow-md shadow-brand-500/25"
+                  : "text-surface-400 hover:text-surface-600 dark:hover:text-surface-300"
               )}
             >
               {item.icon(isActive)}
@@ -105,7 +107,7 @@ export function MobileNav() {
             </Link>
           );
         })}
-      </div>
+      </nav>
     </div>
   );
 }

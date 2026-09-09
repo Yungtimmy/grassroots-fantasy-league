@@ -22,6 +22,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!user.passwordHash || user.passwordHash === "google-oauth") {
+      return NextResponse.json(
+        { success: false, error: 'This account uses Google Sign-In. Please sign in with Google.' },
+        { status: 401 }
+      );
+    }
+
     const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
       return NextResponse.json(

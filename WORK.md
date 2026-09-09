@@ -2,7 +2,7 @@
 
 This file is the persistent brain for this repo. Read it at the start of every session. Update it at the end of every session with what changed, what is still broken, and what to do next.
 
-Last updated: 2026-09-08 (Flutterwave migration + squad UX)
+Last updated: 2026-09-09 (Dashboard redesign + navbar auth gating)
 
 **Git branch: `ADMIN`** (repo initialized at workspace root `cfl/`)
 
@@ -304,3 +304,21 @@ Paste the Supabase **connection string** (Session pooler URI) or the **database 
 - `.env` updated: `PAYMENT_PROVIDER=flutterwave`, keys stored.
 - Squad page: budget progress bar (green→yellow→red), football pitch background via `url('/pitch.jpg')` fallback gradient.
 - 0 TypeScript errors, all Paystack references eliminated.
+
+### 2026-09-09 — Dashboard redesign + navbar auth gating
+
+**Done**
+
+- Dashboard redesigned: single rounded card with gameweek info, countdown, GW points, overall points, rank, and rank change (up/down by X).
+- "My Squad" section: 5-column sharp-cornered grid showing GK, DEF, MID, MID, FWD. Empty if no squad. "View Squad >" link with arrow icon.
+- "Leaderboard Preview" section: user rank at top (highlighted), next 4 ranks below with tiny divider lines. Profile initial, name, points, "pts" label. "View All >" link.
+- Navbar hidden for guests (returns null when not signed in). Login/Register buttons removed from navbar (only in footer/auth pages).
+- Dashboard accessible without auth (shows empty state, "Sign In" button in header).
+- 0 TypeScript errors.
+
+**Still needs**
+
+- Seed Faculty/Department data for FUNAAB so dropdowns have real data.
+- Test payment flow with Flutterwave in development mode.
+- Tests (no test framework yet).
+- Deadline lock, max-3-per-club, vice-captain fallback.

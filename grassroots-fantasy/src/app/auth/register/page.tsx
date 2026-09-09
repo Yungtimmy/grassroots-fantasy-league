@@ -1,124 +1,114 @@
 "use client";
 
 import React, { Suspense, useState, useEffect } from "react";
-import Script from "next/script";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import type { UniversityPublic } from "@/types";
-
-interface StepIndicatorProps {
-  currentStep: number;
-  totalSteps: number;
-}
-
-function StepIndicator({ currentStep, totalSteps }: StepIndicatorProps) {
-  return (
-    <div className="mb-8 flex items-center justify-center gap-2">
-      {Array.from({ length: totalSteps }, (_, i) => (
-        <React.Fragment key={i}>
-          <div
-            className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-              i + 1 < currentStep
-                ? "bg-brand-500 text-white"
-                : i + 1 === currentStep
-                  ? "bg-brand-500/20 text-brand-400 ring-2 ring-brand-500"
-                  : "bg-surface-700 text-surface-400"
-            }`}
-          >
-            {i + 1 < currentStep ? (
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              i + 1
-            )}
-          </div>
-          {i < totalSteps - 1 && (
-            <div
-              className={`h-0.5 w-12 transition-colors ${
-                i + 1 < currentStep ? "bg-brand-500" : "bg-surface-700"
-              }`}
-            />
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
+import { supabaseBrowser } from "@/lib/supabase-browser";
 
 function RegisterForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const preselectedSlug = searchParams.get("university");
-  const [step, setStep] = useState(preselectedSlug ? 2 : 1);
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [error, setError] = useState("");
 
-  const [universities, setUniversities] = useState<UniversityPublic[]>([]);
-  const [universitiesLoading, setUniversitiesLoading] = useState(true);
-  const [selectedUniversity, setSelectedUniversity] =
-    useState<UniversityPublic | null>(null);
+  const [googleUser, setGoogleUser] = useState<{
+    email: string;
+    name: string;
+    avatar: string;
+  } | null>(null);
 
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [universityId, setUniversityId] = useState("");
+  const [universityName, setUniversityName] = useState("");
+  const [faculties, setFaculties] = useState<{ id: string; name: string }[]>([]);
+  const [facultyId, setFacultyId] = useState("");
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [departmentId, setDepartmentId] = useState("");
 
   useEffect(() => {
-    async function fetchUniversities() {
+    supabaseBrowser.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.replace("/oauth/consent");
+        return;
+      }
+
+      const user = session.user;
+      const email = user.email || "";
+      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || email.split("@")[0];
+      const avatar = user.user_metadata?.avatar_url || "";
+
+      setGoogleUser({ email, name: fullName, avatar });
+      setName(fullName);
+      setCheckingAuth(false);
+    });
+  }, [router]);
+
+  useEffect(() => {
+    async function fetchUniversity() {
       try {
         const res = await fetch("/api/universities");
         const data = await res.json();
         if (data.success) {
           const list = data.data?.universities ?? [];
-          setUniversities(list);
-          if (preselectedSlug) {
-            const match = list.find((u: UniversityPublic) => u.slug === preselectedSlug);
-            if (match) {
-              setSelectedUniversity(match);
-              setStep(2);
-            } else {
-              setStep(1);
-            }
+          const funaab = list.find((u: { slug: string }) => u.slug === "funaab");
+          if (funaab) {
+            setUniversityId(funaab.id);
+            setUniversityName(funaab.name);
+
+            const facRes = await fetch(`/api/universities/funaab/faculties`);
+            const facData = await facRes.json();
+            setFaculties(facData.data?.faculties ?? []);
           }
         }
       } catch {
-        setUniversities([]);
-      } finally {
-        setUniversitiesLoading(false);
+        setFaculties([]);
       }
     }
-    fetchUniversities();
-  }, [preselectedSlug]);
+    fetchUniversity();
+  }, []);
 
-  function handleSelectUniversity(uni: UniversityPublic) {
-    setSelectedUniversity(uni);
-    setStep(2);
-  }
+  useEffect(() => {
+    if (facultyId) {
+      fetch(`/api/faculties/${facultyId}/departments`)
+        .then((r) => r.json())
+        .then((d) => setDepartments(d.data?.departments ?? []))
+        .catch(() => setDepartments([]));
+    } else {
+      setDepartments([]);
+    }
+    setDepartmentId("");
+  }, [facultyId]);
 
-  function handleAccountSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setStep(3);
-  }
-
-  async function handleConfirm() {
-    if (!selectedUniversity) return;
     setLoading(true);
     setError("");
+
+    if (!universityId) {
+      setError("University not loaded yet. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    if (!username.trim()) {
+      setError("Please enter a username");
+      setLoading(false);
+      return;
+    }
 
     try {
       const registerRes = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
-          email,
-          username,
-          password,
-          universityId: selectedUniversity.id,
+          name: name.trim(),
+          username: username.trim(),
+          universityId,
+          email: googleUser?.email,
+          facultyId: facultyId || undefined,
+          departmentId: departmentId || undefined,
         }),
       });
 
@@ -133,41 +123,12 @@ function RegisterForm() {
       const paymentRes = await fetch("/api/payments/initialize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          universityId: selectedUniversity.id,
-        }),
+        body: JSON.stringify({ universityId }),
       });
-
       const paymentData = await paymentRes.json();
 
       if (paymentData.success && paymentData.data?.authorizationUrl) {
-        const flutterwaveKey = process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY;
-        if (flutterwaveKey && typeof window !== "undefined" && (window as any).FlutterwaveCheckout) {
-          (window as any).FlutterwaveCheckout({
-            public_key: flutterwaveKey,
-            tx_ref: paymentData.data.reference,
-            amount: 500,
-            currency: "NGN",
-            callback: async (response: any) => {
-              await fetch("/api/payments/verify", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reference: response.tx_ref }),
-              });
-              router.push("/dashboard?payment=success");
-            },
-            onclose: () => {
-              setLoading(false);
-              router.push("/dashboard");
-            },
-            customizations: {
-              title: "Grassroots Fantasy League",
-              description: "Registration fee",
-            },
-          });
-        } else {
-          window.location.href = paymentData.data.authorizationUrl;
-        }
+        window.location.href = paymentData.data.authorizationUrl;
       } else {
         router.push("/dashboard");
       }
@@ -177,267 +138,237 @@ function RegisterForm() {
     }
   }
 
-  return (
-    <div className="rounded-2xl border border-surface-700/50 bg-surface-800/80 p-8 shadow-xl backdrop-blur-sm">
-      <div className="mb-2 text-center">
-        <h1 className="font-display text-2xl font-bold text-surface-100">
-          Join GFL
-        </h1>
-        <p className="mt-2 text-sm text-surface-400">
-          Create your account and start competing
-        </p>
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
       </div>
+    );
+  }
 
-      <StepIndicator currentStep={step} totalSteps={3} />
-
-      {error && (
-        <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-          {error}
+  return (
+    <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
+      <div className="mx-auto max-w-md px-4 py-10">
+        {/* Logo */}
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-brand-500">
+            <svg className="h-8 w-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" />
+            </svg>
+          </div>
+          <h1 className="font-display text-2xl font-bold text-surface-900 dark:text-white">
+            Grassroots Fantasy
+          </h1>
         </div>
-      )}
 
-      {/* Step 1: Select University */}
-      {step === 1 && (
-        <div>
-          <h2 className="mb-4 text-sm font-semibold text-surface-300">
-            Select your university
-          </h2>
-
-          {universitiesLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 4 }, (_, i) => (
-                <div
-                  key={i}
-                  className="h-16 animate-pulse rounded-xl bg-surface-700/50"
-                />
-              ))}
+        {/* Google Account Info */}
+        {googleUser && (
+          <div className="mb-4 flex items-center gap-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800/80 px-4 py-3">
+            {googleUser.avatar ? (
+              <img
+                src={googleUser.avatar}
+                alt={googleUser.name}
+                className="h-10 w-10 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white">
+                {googleUser.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-surface-900 dark:text-white truncate">{googleUser.name}</p>
+              <p className="text-xs text-surface-500 truncate">{googleUser.email}</p>
             </div>
-          ) : universities.length === 0 ? (
-            <p className="py-8 text-center text-sm text-surface-500">
-              No universities available at this time.
+            <svg className="h-5 w-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        )}
+
+        {/* Form Card */}
+        <div className="rounded-2xl border border-surface-200 dark:border-surface-700/50 bg-white dark:bg-surface-800/80 p-6 shadow-xl">
+          <div className="mb-6 text-center">
+            <h2 className="font-display text-xl font-bold text-surface-900 dark:text-white">
+              Complete Your Profile
+            </h2>
+            <p className="mt-1 text-sm text-surface-500">
+              Just a few details to get you started
             </p>
-          ) : (
-            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-              {universities.map((uni) => (
-                <button
-                  key={uni.id}
-                  onClick={() => handleSelectUniversity(uni)}
-                  className="flex w-full items-center gap-4 rounded-xl border border-surface-700/50 bg-surface-900/50 p-4 text-left transition-all hover:border-brand-500/30 hover:bg-surface-800"
-                >
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-500/10 text-xs font-bold text-brand-400">
-                    {uni.shortName.slice(0, 3).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-surface-200">
-                      {uni.name}
-                    </p>
-                    <p className="text-xs text-surface-500">
-                      {uni.shortName}
-                      {uni.state && ` · ${uni.state}`}
-                    </p>
-                  </div>
-                  <svg
-                    className="h-4 w-4 shrink-0 text-surface-500"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Step 2: Account Details */}
-      {step === 2 && (
-        <form onSubmit={handleAccountSubmit} className="space-y-4">
-          {selectedUniversity && (
-            <div className="mb-2 flex items-center gap-3 rounded-lg bg-brand-500/10 px-4 py-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-500/20 text-xs font-bold text-brand-400">
-                {selectedUniversity.shortName.slice(0, 3).toUpperCase()}
-              </div>
-              <div>
-                <p className="text-sm font-medium text-surface-200">
-                  {selectedUniversity.name}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className="text-xs text-brand-400 hover:text-brand-300"
-                >
-                  Change
-                </button>
-              </div>
-            </div>
-          )}
-
-          <Input
-            label="Full Name"
-            placeholder="John Doe"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            autoComplete="name"
-          />
-
-          <Input
-            label="Username"
-            placeholder="johndoe"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-            autoComplete="username"
-          />
-
-          <Input
-            label="Email"
-            type="email"
-            placeholder="you@university.edu"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
-
-          <Input
-            label="Password"
-            type="password"
-            placeholder="Create a strong password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="new-password"
-          />
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            className="w-full"
-          >
-            Continue
-          </Button>
-
-          <button
-            type="button"
-            onClick={() => setStep(1)}
-            className="w-full text-center text-sm text-surface-400 hover:text-surface-300"
-          >
-            Back to university selection
-          </button>
-        </form>
-      )}
-
-      {/* Step 3: Confirmation */}
-      {step === 3 && selectedUniversity && (
-        <div>
-          <Card className="mb-6 border-brand-500/20 bg-brand-500/5">
-            <Card.Content className="py-6 text-center">
-              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-500/20 text-lg font-bold text-brand-400">
-                {selectedUniversity.shortName.slice(0, 3).toUpperCase()}
-              </div>
-              <h3 className="font-display text-lg font-semibold text-surface-100">
-                You are joining
-              </h3>
-              <p className="text-xl font-bold text-brand-400">
-                {selectedUniversity.name} Fantasy League
-              </p>
-            </Card.Content>
-          </Card>
-
-          <div className="mb-6 space-y-3 rounded-xl border border-surface-700/50 bg-surface-900/50 p-4">
-            <div className="flex items-center gap-3">
-              <svg
-                className="h-5 w-5 shrink-0 text-brand-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"
-                />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-surface-200">
-                  Registration Fee
-                </p>
-                <p className="text-xs text-surface-500">
-                  One-time payment to join your university&apos;s league
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <svg
-                className="h-5 w-5 shrink-0 text-brand-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-surface-200">
-                  Secure Payment
-                </p>
-                <p className="text-xs text-surface-500">
-                  Powered by Flutterwave. Your payment is encrypted and secure.
-                </p>
-              </div>
-            </div>
           </div>
 
           {error && (
-            <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <div className="mb-4 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
               {error}
             </div>
           )}
 
-          <Button
-            variant="primary"
-            size="lg"
-            className="w-full"
-            loading={loading}
-            onClick={handleConfirm}
-          >
-            Proceed to Payment
-          </Button>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Full Name */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+                Full Name
+              </label>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-900/50 py-3 pl-10 pr-4 text-sm text-surface-900 dark:text-surface-100 placeholder-surface-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            </div>
 
-          <button
-            type="button"
-            onClick={() => setStep(2)}
-            className="mt-3 w-full text-center text-sm text-surface-400 hover:text-surface-300"
-          >
-            Back to account details
-          </button>
+            {/* Username */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+                Username
+              </label>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Choose a username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  autoComplete="username"
+                  className="w-full rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-900/50 py-3 pl-10 pr-4 text-sm text-surface-900 dark:text-surface-100 placeholder-surface-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+                Email Address
+              </label>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <input
+                  type="email"
+                  value={googleUser?.email || ""}
+                  readOnly
+                  className="w-full rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900/80 py-3 pl-10 pr-4 text-sm text-surface-900 dark:text-surface-100 cursor-not-allowed"
+                />
+                <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-green-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <p className="mt-1 text-xs text-surface-500">From your Google account</p>
+            </div>
+
+            {/* University - Pre-selected FUNAAB */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+                University
+              </label>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+                <input
+                  type="text"
+                  value={universityName || "Loading..."}
+                  readOnly
+                  className="w-full rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900/80 py-3 pl-10 pr-4 text-sm text-surface-900 dark:text-surface-100 cursor-not-allowed"
+                />
+                <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Faculty */}
+            {faculties.length > 0 && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+                  Faculty
+                </label>
+                <div className="relative">
+                  <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                  <select
+                    value={facultyId}
+                    onChange={(e) => setFacultyId(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-900/50 py-3 pl-10 pr-10 text-sm text-surface-900 dark:text-surface-100 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  >
+                    <option value="">Select your faculty</option>
+                    {faculties.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                  <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            )}
+
+            {/* Department */}
+            {facultyId && departments.length > 0 && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+                  Department
+                </label>
+                <div className="relative">
+                  <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <select
+                    value={departmentId}
+                    onChange={(e) => setDepartmentId(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-900/50 py-3 pl-10 pr-10 text-sm text-surface-900 dark:text-surface-100 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  >
+                    <option value="">Select your department</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                  <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            )}
+
+            {/* Register Button */}
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              className="w-full"
+              loading={loading}
+            >
+              Register & Pay
+            </Button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <p className="text-sm text-surface-500">
+              Already have an account?{" "}
+              <Link
+                href="/auth/login"
+                className="font-semibold text-brand-500 hover:text-brand-600"
+              >
+                Login
+              </Link>
+            </p>
+          </div>
         </div>
-      )}
-
-      <div className="mt-6 text-center">
-        <p className="text-sm text-surface-400">
-          Already have an account?{" "}
-          <Link
-            href="/auth/login"
-            className="font-medium text-brand-400 hover:text-brand-300"
-          >
-            Sign in
-          </Link>
-        </p>
       </div>
     </div>
   );
@@ -452,7 +383,6 @@ export default function RegisterPage() {
         </div>
       }
     >
-      <Script src="https://checkout.flutterwave.com/v3.js" strategy="lazyOnload" />
       <RegisterForm />
     </Suspense>
   );

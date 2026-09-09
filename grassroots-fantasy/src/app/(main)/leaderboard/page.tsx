@@ -42,11 +42,14 @@ export default function LeaderboardPage() {
   const [seasons, setSeasons] = useState<Season[]>([])
   const [selectedSeason, setSelectedSeason] = useState("")
   const [grassrootsData, setGrassrootsData] = useState<GrassrootsEntry[]>([])
+  const [leagueData, setLeagueData] = useState<GrassrootsEntry[]>([])
   const [universityData, setUniversityData] = useState<UniversityEntry[]>([])
   const [gameweekData, setGameweekData] = useState<GameweekEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [gameweek, setGameweek] = useState("1")
+  const [leagues, setLeagues] = useState<Array<{ id: string; name: string }>>([])
+  const [selectedLeague, setSelectedLeague] = useState("")
   const perPage = 25
 
   const fetchGrassroots = useCallback(async (seasonId: string) => {
@@ -92,6 +95,42 @@ export default function LeaderboardPage() {
     }
   }, [])
 
+  const fetchLeague = useCallback(async (leagueId: string) => {
+    const res = await fetch(`/api/leaderboard/university/${leagueId}`)
+    if (res.ok) {
+      const data = await res.json()
+      const items = data.data ?? []
+      setLeagueData(
+        items.map((e: { rank: number; name: string; totalPoints: number }) => ({
+          rank: e.rank,
+          playerName: e.name,
+          university: "",
+          points: e.totalPoints,
+          gwPoints: 0,
+          movement: 0,
+        }))
+      )
+    }
+  }, [])
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data?.leagues) {
+          const userLeagues = data.data.leagues.map((m: any) => ({
+            id: m.leagueId,
+            name: m.league?.name || "My League",
+          }))
+          setLeagues(userLeagues)
+          if (userLeagues.length > 0) {
+            setSelectedLeague(userLeagues[0].id)
+          }
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     fetch("/api/seasons")
       .then((res) => res.json())
@@ -109,12 +148,18 @@ export default function LeaderboardPage() {
     setLoading(true)
     if (activeTab === "grassroots") {
       fetchGrassroots(selectedSeason).finally(() => setLoading(false))
+    } else if (activeTab === "league") {
+      if (selectedLeague) {
+        fetchLeague(selectedLeague).finally(() => setLoading(false))
+      } else {
+        setLoading(false)
+      }
     } else if (activeTab === "university") {
       fetchUniversityRankings(selectedSeason).finally(() => setLoading(false))
     } else {
       fetchGameweek(selectedSeason, gameweek).finally(() => setLoading(false))
     }
-  }, [selectedSeason, activeTab, page, gameweek, fetchGrassroots, fetchUniversityRankings, fetchGameweek])
+  }, [selectedSeason, activeTab, page, gameweek, selectedLeague, fetchGrassroots, fetchUniversityRankings, fetchGameweek, fetchLeague])
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -131,8 +176,9 @@ export default function LeaderboardPage() {
 
       <Tabs
         tabs={[
-          { id: "grassroots", label: "Grassroots" },
-          { id: "university", label: "University Rankings" },
+          { id: "grassroots", label: "Global" },
+          { id: "league", label: "My League" },
+          { id: "university", label: "University" },
           { id: "gameweek", label: "Gameweek" },
         ]}
         value={activeTab}
@@ -223,6 +269,72 @@ export default function LeaderboardPage() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === "league" && (
+          <div>
+            {leagues.length > 1 && (
+              <div className="mb-4">
+                <Select
+                  options={leagues.map((l) => ({ label: l.name, value: l.id }))}
+                  value={selectedLeague}
+                  onChange={setSelectedLeague}
+                  placeholder="Select league"
+                  className="w-64"
+                />
+              </div>
+            )}
+            <div className="overflow-x-auto rounded-xl border border-surface-800 bg-surface-900">
+              <table className="w-full min-w-[500px]">
+                <thead>
+                  <tr className="border-b border-surface-800 bg-surface-800/50">
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase text-surface-400">Rank</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase text-surface-400">Player</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase text-surface-400">Points</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={3} className="px-6 py-12 text-center text-surface-400">Loading...</td>
+                    </tr>
+                  ) : leagueData.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-6 py-12 text-center text-surface-400">No league data available.</td>
+                    </tr>
+                  ) : (
+                    leagueData.map((entry) => (
+                      <tr
+                        key={entry.rank}
+                        className={`border-b border-surface-800 transition-colors hover:bg-surface-800/30 ${
+                          user && entry.playerName === user.name ? "bg-brand-500/10" : ""
+                        }`}
+                      >
+                        <td className="px-6 py-4 text-sm font-medium">
+                          {entry.rank <= 3 ? (
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-500/20 text-xs font-bold text-brand-400">
+                              {entry.rank}
+                            </span>
+                          ) : (
+                            <span className="text-surface-400">{entry.rank}</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-medium">
+                          {entry.playerName}
+                          {user && entry.playerName === user.name && (
+                            <span className="ml-2 text-xs text-brand-400">(You)</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right font-mono text-sm font-semibold text-white">
+                          {entry.points}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

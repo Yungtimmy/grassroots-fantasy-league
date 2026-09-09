@@ -12,16 +12,21 @@ model User {
   email        String   @unique
   username     String   @unique
   name         String
-  passwordHash String   @map("password_hash")
+  passwordHash String?  @map("password_hash")
+  phone        String?
   avatar       String?
   role         String   @default("user")
+  facultyId    String?  @map("faculty_id")
+  departmentId String?  @map("department_id")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  leagueMemberships UniversityLeagueMember[]
-  fantasyTeams      FantasyTeam[]
-  payments          Payment[]
-  pointTransactions FantasyPointTransaction[]
+  faculty            Faculty?              @relation(fields: [facultyId], references: [id])
+  department         Department?           @relation(fields: [departmentId], references: [id])
+  leagueMemberships  UniversityLeagueMember[]
+  fantasyTeams       FantasyTeam[]
+  payments           Payment[]
+  pointTransactions  FantasyPointTransaction[]
 
   @@map("users")
 }
@@ -38,7 +43,8 @@ model University {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  leagues UniversityLeague[]
+  leagues   UniversityLeague[]
+  faculties Faculty[]
 
   @@map("universities")
 }
@@ -66,6 +72,11 @@ model UniversityLeague {
   id           String   @id @default(cuid())
   universityId String   @map("university_id")
   seasonId     String   @map("season_id")
+  name         String?
+  description  String?
+  entryFee     Int?     @map("entry_fee")
+  prizeInfo    String?  @map("prize_info")
+  rules        String?
   status       String   @default("open")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -79,6 +90,31 @@ model UniversityLeague {
   @@index([universityId])
   @@index([seasonId])
   @@map("university_leagues")
+}
+
+model Faculty {
+  id           String   @id @default(cuid())
+  name         String
+  universityId String   @map("university_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  university  University   @relation(fields: [universityId], references: [id])
+  departments Department[]
+  users       User[]
+
+  @@map("faculties")
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  facultyId String   @map("faculty_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  faculty Faculty @relation(fields: [facultyId], references: [id])
+  users   User[]
+
+  @@map("departments")
 }
 
 model UniversityLeagueMember {

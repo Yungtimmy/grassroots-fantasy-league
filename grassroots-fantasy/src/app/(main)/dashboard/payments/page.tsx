@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/layout/auth-provider"
 
 interface Payment {
@@ -27,14 +26,9 @@ const statusLabels: Record<string, string> = {
 
 export default function PaymentsPage() {
   const { user, loading: authLoading } = useAuth()
-  const router = useRouter()
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-
-  useEffect(() => {
-    if (!authLoading && !user) router.push("/auth/login")
-  }, [authLoading, user, router])
 
   useEffect(() => {
     if (user) {
