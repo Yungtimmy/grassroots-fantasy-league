@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, removeAuthCookie } from "@/lib/auth";
 import { getCurrentSeason } from "@/lib/league";
 import { LeaderboardService } from "@/lib/leaderboard";
 
@@ -46,6 +46,28 @@ export async function GET() {
         nextGameweek: nextGameweek
           ? { number: nextGameweek.number, deadline: nextGameweek.deadline.toISOString(), startDate: nextGameweek.startDate.toISOString(), status: nextGameweek.status }
           : null,
+        leagues: [],
+        nearbyPlayers: [],
+      });
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { id: authUser.userId },
+      select: { id: true },
+    });
+    if (!dbUser) {
+      await removeAuthCookie();
+      return NextResponse.json({
+        authenticated: false,
+        hasPaid: false,
+        points: 0,
+        gameweekPoints: 0,
+        universityRank: 0,
+        grassrootsRank: 0,
+        universityName: "",
+        formation: "4-4-2",
+        teamPlayers: [],
+        nextGameweek: null,
         leagues: [],
         nearbyPlayers: [],
       });

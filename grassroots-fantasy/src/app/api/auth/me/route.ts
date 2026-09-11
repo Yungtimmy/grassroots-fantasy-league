@@ -28,9 +28,11 @@ export async function GET() {
     });
 
     if (!user) {
+      const { removeAuthCookie } = await import('@/lib/auth');
+      await removeAuthCookie();
       return NextResponse.json(
         { success: false, error: 'User not found' },
-        { status: 404 }
+        { status: 401 }
       );
     }
 

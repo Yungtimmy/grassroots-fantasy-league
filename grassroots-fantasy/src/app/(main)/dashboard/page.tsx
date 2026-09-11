@@ -95,8 +95,12 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (!loading && data && data.authenticated && data.hasPaid === false) {
-      router.push("/leagues")
+    if (!loading && data) {
+      if (data.authenticated === false) {
+        window.location.href = "/"
+      } else if (data.hasPaid === false) {
+        router.push("/leagues")
+      }
     }
   }, [loading, data, router])
 

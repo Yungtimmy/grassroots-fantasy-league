@@ -80,36 +80,6 @@ export default function RewardsPage() {
           </div>
         </div>
 
-        {/* Example */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 mb-10 backdrop-blur-xl">
-          <h3 className="font-display text-lg font-semibold text-white mb-3">Example</h3>
-          <p className="text-sm text-gray-400 mb-4">If 100 players join at ₦5,000 each:</p>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-xl bg-white/5 p-4 text-center">
-              <p className="text-xs text-gray-500">Total Pool</p>
-              <p className="text-lg font-bold text-white">₦500,000</p>
-            </div>
-            <div className="rounded-xl bg-yellow-500/10 p-4 text-center">
-              <p className="text-xs text-gray-500">1st Place (40%)</p>
-              <p className="text-lg font-bold text-yellow-400">₦200,000</p>
-            </div>
-            <div className="rounded-xl bg-gray-500/10 p-4 text-center">
-              <p className="text-xs text-gray-500">2nd Place (20%)</p>
-              <p className="text-lg font-bold text-gray-300">₦100,000</p>
-            </div>
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-3">
-            <div className="rounded-xl bg-amber-500/10 p-4 text-center">
-              <p className="text-xs text-gray-500">3rd Place (10%)</p>
-              <p className="text-lg font-bold text-amber-600">₦50,000</p>
-            </div>
-            <div className="rounded-xl bg-white/5 p-4 text-center col-span-2">
-              <p className="text-xs text-gray-500">Platform & Operations (30%)</p>
-              <p className="text-lg font-bold text-gray-400">₦150,000</p>
-            </div>
-          </div>
-        </div>
-
         {/* Features */}
         <div className="grid grid-cols-2 gap-4 mb-10">
           {features.map((f, i) => (
