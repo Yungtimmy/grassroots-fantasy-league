@@ -113,6 +113,45 @@ export default function GameweekPage() {
 
   const gwStatus = selectedGW?.status === "active" ? "LIVE" : selectedGW?.status === "finished" ? "ENDED" : "UPCOMING";
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black px-4 py-4">
+        <div className="mx-auto max-w-lg space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-5 w-5 rounded bg-white/10 animate-pulse" />
+            <div className="h-4 w-28 rounded bg-white/10 animate-pulse" />
+          </div>
+          <div className="flex gap-2">
+            {[1,2,3,4].map(i => <div key={i} className="h-8 flex-1 rounded-xl bg-white/10 animate-pulse" />)}
+          </div>
+          <div className="h-px bg-white/10" />
+          {[1,2,3].map(i => (
+            <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="h-3 w-20 rounded bg-white/10 animate-pulse" />
+                <div className="h-3 w-12 rounded bg-white/10 animate-pulse" />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded bg-white/10 animate-pulse" />
+                  <div className="h-4 w-24 rounded bg-white/10 animate-pulse" />
+                </div>
+                <div className="h-4 w-8 rounded bg-white/10 animate-pulse" />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded bg-white/10 animate-pulse" />
+                  <div className="h-4 w-24 rounded bg-white/10 animate-pulse" />
+                </div>
+                <div className="h-4 w-8 rounded bg-white/10 animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
       {/* Header */}

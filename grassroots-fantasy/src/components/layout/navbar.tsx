@@ -52,7 +52,7 @@ export function Navbar() {
     router.push("/");
   }
 
-  if (loading || !user) return null;
+  if (!user) return null;
 
   return (
     <>

@@ -46,9 +46,20 @@ export default function AuthConfirmPage() {
 
     const checkUserAndRedirect = async () => {
       try {
-        const res = await fetch("/api/auth/me");
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        const email = session?.user?.email;
+        if (!email) {
+          router.replace("/auth/register");
+          return;
+        }
+
+        const res = await fetch("/api/auth/claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
         const data = await res.json();
-        if (data.success && data.data?.user) {
+        if (data.success) {
           router.replace("/dashboard");
         } else {
           router.replace("/auth/register");

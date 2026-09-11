@@ -102,6 +102,7 @@ export default function SquadPage() {
   const [posFilter, setPosFilter] = useState("ALL");
   const [marketLoading, setMarketLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [teamLoading, setTeamLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [activeSlot, setActiveSlot] = useState<{ area: "start" | "sub"; index: number } | null>(null);
@@ -210,7 +211,8 @@ export default function SquadPage() {
         setStarters(startingSlots);
         setSubs(subSlots);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setTeamLoading(false));
   }, [user]);
 
   const fetchMarket = useCallback(async () => {
@@ -346,6 +348,32 @@ export default function SquadPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  if (teamLoading) {
+    return (
+      <div className="min-h-screen bg-black px-4 py-4">
+        <div className="mx-auto max-w-lg space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-5 w-5 rounded bg-white/10 animate-pulse" />
+            <div className="h-4 w-20 rounded bg-white/10 animate-pulse" />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="h-8 w-24 rounded bg-white/10 animate-pulse" />
+            <div className="h-8 w-24 rounded bg-white/10 animate-pulse" />
+          </div>
+          <div className="flex gap-2">
+            <div className="h-10 flex-1 rounded-xl bg-white/10 animate-pulse" />
+            <div className="h-10 w-16 rounded-xl bg-white/10 animate-pulse" />
+            <div className="h-10 w-20 rounded-xl bg-white/10 animate-pulse" />
+          </div>
+          <div className="aspect-[3/4] rounded-2xl bg-white/5 animate-pulse" />
+          <div className="grid grid-cols-5 gap-2">
+            {[1,2,3,4,5].map(i => <div key={i} className="aspect-square rounded bg-white/5 animate-pulse" />)}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -93,8 +93,59 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+      <div className="min-h-screen bg-black px-4 py-6">
+        <div className="mx-auto max-w-lg space-y-6">
+          {/* Gameweek skeleton */}
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div className="space-y-2">
+                <div className="h-5 w-32 rounded-lg bg-white/10 animate-pulse" />
+                <div className="h-3 w-40 rounded-lg bg-white/5 animate-pulse" />
+              </div>
+              <div className="flex gap-1.5">
+                {[1,2,3,4].map(i => <div key={i} className="h-8 w-8 rounded-lg bg-white/10 animate-pulse" />)}
+              </div>
+            </div>
+            <div className="h-px bg-white/10 mb-5" />
+            <div className="grid grid-cols-3 gap-4">
+              {[1,2,3].map(i => (
+                <div key={i} className="text-center space-y-1">
+                  <div className="h-2 w-12 mx-auto rounded bg-white/5 animate-pulse" />
+                  <div className="h-7 w-14 mx-auto rounded bg-white/10 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Squad skeleton */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="h-4 w-20 rounded bg-white/10 animate-pulse" />
+              <div className="h-3 w-16 rounded bg-white/5 animate-pulse" />
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {[1,2,3,4,5].map(i => <div key={i} className="aspect-square rounded bg-white/5 animate-pulse" />)}
+            </div>
+          </div>
+          {/* Leaderboard skeleton */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="h-4 w-28 rounded bg-white/10 animate-pulse" />
+              <div className="h-3 w-14 rounded bg-white/5 animate-pulse" />
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-1">
+              {[1,2,3,4].map(i => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0">
+                  <div className="w-6 h-4 rounded bg-white/10 animate-pulse" />
+                  <div className="h-7 w-7 rounded-full bg-white/10 animate-pulse" />
+                  <div className="flex-1 space-y-1">
+                    <div className="h-3 w-24 rounded bg-white/10 animate-pulse" />
+                  </div>
+                  <div className="h-3 w-8 rounded bg-white/10 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

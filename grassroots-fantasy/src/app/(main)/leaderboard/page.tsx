@@ -89,14 +89,15 @@ export default function LeaderboardPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-400 border-t-transparent" />
-                    Loading...
-                  </div>
-                </td>
-              </tr>
+              Array.from({ length: 10 }).map((_, i) => (
+                <tr key={i} className="border-b border-white/5">
+                  <td className="px-6 py-4"><div className="h-4 w-6 rounded bg-white/10 animate-pulse" /></td>
+                  <td className="px-6 py-4"><div className="h-4 w-28 rounded bg-white/10 animate-pulse" /></td>
+                  <td className="px-6 py-4 text-right"><div className="h-4 w-10 ml-auto rounded bg-white/10 animate-pulse" /></td>
+                  <td className="px-6 py-4 text-right"><div className="h-4 w-8 ml-auto rounded bg-white/10 animate-pulse" /></td>
+                  <td className="px-6 py-4 text-center"><div className="h-4 w-6 mx-auto rounded bg-white/10 animate-pulse" /></td>
+                </tr>
+              ))
             ) : data.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-gray-400">No data available.</td>
