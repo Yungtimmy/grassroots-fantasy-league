@@ -38,6 +38,27 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState("");
+
+  async function handleResetTest() {
+    if (!window.confirm("This will delete ALL scoring data, match stats, match results, and reset all gameweek statuses. Your account and squad will remain. Proceed?")) return;
+    setResetting(true);
+    setResetMessage("");
+    try {
+      const res = await fetch("/api/admin/reset-test", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setResetMessage(`Done! ${data.deletedTransactions} point transactions cleared.`);
+      } else {
+        setResetMessage("Error: " + (data.error || "Unknown error"));
+      }
+    } catch {
+      setResetMessage("Error: Could not reach server");
+    } finally {
+      setResetting(false);
+    }
+  }
 
   useEffect(() => {
     async function fetchData() {
@@ -127,25 +148,46 @@ export default function AdminDashboardPage() {
         <div className="px-6 py-4 border-b border-surface-700/50">
           <h2 className="text-lg font-semibold text-white">Quick Actions</h2>
         </div>
-        <div className="p-6 flex flex-wrap gap-3">
-          <Link href="/admin/seasons">
-            <Button variant="primary" size="sm">1. Season</Button>
-          </Link>
-          <Link href="/admin/universities">
-            <Button variant="secondary" size="sm">2. Universities</Button>
-          </Link>
-          <Link href="/admin/clubs">
-            <Button variant="secondary" size="sm">3. Clubs</Button>
-          </Link>
-          <Link href="/admin/players">
-            <Button variant="secondary" size="sm">4. Players</Button>
-          </Link>
-          <Link href="/admin/gameweeks">
-            <Button variant="outline" size="sm">5. Gameweeks</Button>
-          </Link>
-          <Link href="/admin/matches">
-            <Button variant="outline" size="sm">6. Fixtures</Button>
-          </Link>
+        <div className="p-6">
+          <div className="flex flex-wrap gap-3">
+            <Link href="/admin/seasons">
+              <Button variant="primary" size="sm">1. Season</Button>
+            </Link>
+            <Link href="/admin/universities">
+              <Button variant="secondary" size="sm">2. Universities</Button>
+            </Link>
+            <Link href="/admin/clubs">
+              <Button variant="secondary" size="sm">3. Clubs</Button>
+            </Link>
+            <Link href="/admin/players">
+              <Button variant="secondary" size="sm">4. Players</Button>
+            </Link>
+            <Link href="/admin/gameweeks">
+              <Button variant="outline" size="sm">5. Gameweeks</Button>
+            </Link>
+            <Link href="/admin/matches">
+              <Button variant="outline" size="sm">6. Fixtures</Button>
+            </Link>
+          </div>
+          <div className="mt-6 pt-6 border-t border-surface-700/50">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="primary"
+                size="sm"
+                loading={resetting}
+                onClick={handleResetTest}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {resetting ? "Resetting..." : "Reset Test Data"}
+              </Button>
+              <p className="text-xs text-surface-500">Clears all points, match stats, results & gameweek statuses</p>
+            </div>
+            {resetMessage && (
+              <p className={`mt-2 text-sm ${resetMessage.startsWith("Done") ? "text-green-400" : "text-red-400"}`}>
+                {resetMessage}
+              </p>
+            )}
+          </div>
         </div>
       </Card>
 
