@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/layout/auth-provider";
 import { Card } from "@/components/ui/card";
@@ -54,43 +54,31 @@ export default function GameweekPage() {
   const [rankChange, setRankChange] = useState(0);
   const [playerBreakdown, setPlayerBreakdown] = useState<PlayerBreakdown[]>([]);
 
-  useEffect(() => {
-    fetchGameweeks();
-  }, []);
-
-  useEffect(() => {
-    if (selectedGW) {
-      fetchMatches(selectedGW.id);
-      if (user) fetchMyPoints(selectedGW.id);
-    }
-  }, [selectedGW, user]);
-
-  async function fetchGameweeks() {
+  const fetchGameweeks = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/gameweeks");
+      const res = await fetch("/api/gameweeks");
       const data = await res.json();
       const gws = data.data ?? [];
       setGameweeks(gws);
-      const active = gws.find((g: Gameweek) => g.status === "active") || gws[0];
-      if (active) setSelectedGW(active);
+      return gws;
     } catch {
-      // silent
+      return [];
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  async function fetchMatches(gwId: string) {
+  const fetchMatches = useCallback(async (gwId: string) => {
     try {
-      const res = await fetch(`/api/admin/matches?gameweekId=${gwId}`);
+      const res = await fetch(`/api/matches?gameweekId=${gwId}`);
       const data = await res.json();
       setMatches(data.data ?? []);
     } catch {
       setMatches([]);
     }
-  }
+  }, []);
 
-  async function fetchMyPoints(gwId: string) {
+  const fetchMyPoints = useCallback(async (gwId: string) => {
     try {
       const res = await fetch(`/api/leaderboard/gameweek?gameweekId=${gwId}`);
       const data = await res.json();
@@ -105,7 +93,31 @@ export default function GameweekPage() {
     } catch {
       // silent
     }
-  }
+  }, [user]);
+
+  // Initial load
+  useEffect(() => {
+    fetchGameweeks().then((gws) => {
+      const active = gws.find((g: Gameweek) => g.status === "active") || gws[0];
+      if (active) setSelectedGW(active);
+    });
+  }, [fetchGameweeks]);
+
+  // Fetch matches + points when gameweek selected
+  useEffect(() => {
+    if (selectedGW) {
+      fetchMatches(selectedGW.id);
+      if (user) fetchMyPoints(selectedGW.id);
+    }
+  }, [selectedGW, user, fetchMatches, fetchMyPoints]);
+
+  // Auto-refresh every 30s to pick up live/finished status changes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (selectedGW) fetchMatches(selectedGW.id);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [selectedGW, fetchMatches]);
 
   const liveMatches = matches.filter((m) => m.status === "live");
   const finishedMatches = matches.filter((m) => m.status === "finished" || m.status === "completed");

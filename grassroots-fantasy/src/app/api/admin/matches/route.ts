@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { autoUpdateMatchStatuses } from "@/lib/matches";
 
 export async function GET() {
   try {
     await requireAdmin();
+    await autoUpdateMatchStatuses();
     const matches = await prisma.match.findMany({
       orderBy: { date: "asc" },
       include: {

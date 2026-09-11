@@ -109,6 +109,12 @@ export default function MatchesPage() {
     fetchData();
   }, [fetchData]);
 
+  // Auto-refresh every 30s to pick up live/finished status changes
+  useEffect(() => {
+    const interval = setInterval(() => fetchData(), 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
   function openCreate() {
     setForm({ gameweekId: "", homeTeamId: "", awayTeamId: "", date: "", time: "", venue: "" });
     setFormError("");
