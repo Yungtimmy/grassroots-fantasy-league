@@ -215,6 +215,7 @@ async function saveTeam(request: NextRequest, isUpdate: boolean) {
     if (players && players.length > 0) {
       const dbPlayers = await prisma.realPlayer.findMany({
         where: { id: { in: players.map((p) => p.playerId) } },
+        include: { realTeam: { select: { name: true } } },
       });
       if (dbPlayers.length !== players.length) {
         return NextResponse.json({ success: false, error: "One or more players were not found" }, { status: 400 });
@@ -226,6 +227,24 @@ async function saveTeam(request: NextRequest, isUpdate: boolean) {
           { success: false, error: `Budget exceeded. Used ${(usedBudget / 10).toFixed(1)}m of 100.0m` },
           { status: 400 }
         );
+      }
+
+      const teamEntries: Array<{ name: string; count: number }> = [];
+      for (const p of dbPlayers) {
+        const existing = teamEntries.find((e) => e.name === p.realTeam.name);
+        if (existing) {
+          existing.count++;
+        } else {
+          teamEntries.push({ name: p.realTeam.name, count: 1 });
+        }
+      }
+      for (const entry of teamEntries) {
+        if (entry.count > 3) {
+          return NextResponse.json(
+            { success: false, error: `Max 3 players from ${entry.name}. You selected ${entry.count}.` },
+            { status: 400 }
+          );
+        }
       }
 
       resolvedPlayers = players.map((slot) => {

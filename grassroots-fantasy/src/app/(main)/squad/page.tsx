@@ -262,6 +262,13 @@ export default function SquadPage() {
       setError("Not enough budget for this player.");
       return;
     }
+
+    const sameTeamCount = squad.filter((s) => s.player?.realTeam.id === player.realTeam.id).length;
+    if (sameTeamCount >= 3) {
+      setError(`Max 3 players from ${player.realTeam.name}. Remove one first.`);
+      return;
+    }
+
     setError("");
 
     if (activeSlot) {
