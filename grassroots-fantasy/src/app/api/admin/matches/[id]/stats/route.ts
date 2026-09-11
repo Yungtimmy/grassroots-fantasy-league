@@ -22,8 +22,8 @@ export async function GET(
 
     // Load all players from both teams
     const players = await prisma.realPlayer.findMany({
-      where: { teamId: { in: [match.homeTeamId, match.awayTeamId] } },
-      select: { id: true, name: true, position: true, teamId: true },
+      where: { realTeamId: { in: [match.homeTeamId, match.awayTeamId] } },
+      select: { id: true, name: true, position: true, realTeamId: true },
       orderBy: { name: "asc" },
     });
 
@@ -42,8 +42,8 @@ export async function GET(
         playerId: p.id,
         playerName: p.name,
         position: p.position,
-        teamId: p.teamId,
-        isHome: p.teamId === match.homeTeamId,
+        teamId: p.realTeamId,
+        isHome: p.realTeamId === match.homeTeamId,
         minutes: stat?.minutes ?? 0,
         goals: stat?.goals ?? 0,
         assists: stat?.assists ?? 0,
