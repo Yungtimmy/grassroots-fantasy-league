@@ -234,11 +234,19 @@ export default function GameweekPage() {
                     month: "short",
                     day: "numeric",
                   })}{" "}
+                  {new Date(selectedGW.startDate).toLocaleTimeString("en-NG", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}{" "}
                   -{" "}
                   {new Date(selectedGW.endDate).toLocaleDateString("en-NG", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
+                  })}{" "}
+                  {new Date(selectedGW.endDate).toLocaleTimeString("en-NG", {
+                    hour: "2-digit",
+                    minute: "2-digit",
                   })}
                 </p>
               </div>
@@ -412,8 +420,15 @@ function MatchCard({ match, compact = false }: { match: Match; compact?: boolean
           {isFinished && !isLive && (
             <span className="text-[10px] font-medium text-surface-500">FT</span>
           )}
-          {!isLive && !isFinished && match.time && (
-            <span className="text-[10px] text-surface-500">{match.time}</span>
+          {!isLive && !isFinished && (
+            <div className="text-right">
+              {match.time && (
+                <span className="text-[10px] font-medium text-surface-400">{match.time}</span>
+              )}
+              <span className="block text-[9px] text-surface-500">
+                {new Date(match.date).toLocaleDateString("en-NG", { month: "short", day: "numeric" })}
+              </span>
+            </div>
           )}
         </div>
       </div>

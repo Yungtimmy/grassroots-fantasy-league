@@ -45,8 +45,11 @@ export default function GameweeksPage() {
     number: 1,
     name: "",
     deadline: "",
+    deadlineTime: "23:59",
     startDate: "",
+    startTime: "00:00",
     endDate: "",
+    endTime: "23:59",
   });
   const [formError, setFormError] = useState("");
 
@@ -78,20 +81,27 @@ export default function GameweeksPage() {
 
   function openCreate() {
     setEditItem(null);
-    setForm({ seasonId: "", number: 1, name: "", deadline: "", startDate: "", endDate: "" });
+    setForm({ seasonId: "", number: 1, name: "", deadline: "", deadlineTime: "23:59", startDate: "", startTime: "00:00", endDate: "", endTime: "23:59" });
     setFormError("");
     setModalOpen(true);
   }
 
   function openEdit(gw: Gameweek) {
     setEditItem(gw);
+    const d = new Date(gw.deadline);
+    const s = new Date(gw.startDate);
+    const e = new Date(gw.endDate);
+    const fmt = (dt: Date) => `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
     setForm({
       seasonId: gw.seasonId,
       number: gw.number,
       name: gw.name,
       deadline: gw.deadline.split("T")[0],
+      deadlineTime: fmt(d),
       startDate: gw.startDate.split("T")[0],
+      startTime: fmt(s),
       endDate: gw.endDate.split("T")[0],
+      endTime: fmt(e),
     });
     setFormError("");
     setModalOpen(true);
@@ -108,10 +118,16 @@ export default function GameweeksPage() {
     try {
       const url = editItem ? `/api/admin/gameweeks/${editItem.id}` : "/api/admin/gameweeks";
       const method = editItem ? "PUT" : "POST";
+      const body = {
+        ...form,
+        deadline: `${form.deadline}T${form.deadlineTime}`,
+        startDate: `${form.startDate}T${form.startTime}`,
+        endDate: `${form.endDate}T${form.endTime}`,
+      };
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success) {
@@ -275,28 +291,55 @@ export default function GameweeksPage() {
               required
             />
           </div>
-          <Input
-            label="Deadline"
-            type="date"
-            value={form.deadline}
-            onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-            required
-          />
+          <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+            <Input
+              label="Deadline Date"
+              type="date"
+              value={form.deadline}
+              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+              required
+            />
+            <Input
+              label="Time"
+              type="time"
+              value={form.deadlineTime}
+              onChange={(e) => setForm({ ...form, deadlineTime: e.target.value })}
+              className="w-28"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Start Date"
-              type="date"
-              value={form.startDate}
-              onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-              required
-            />
-            <Input
-              label="End Date"
-              type="date"
-              value={form.endDate}
-              onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-              required
-            />
+            <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+              <Input
+                label="Start Date"
+                type="date"
+                value={form.startDate}
+                onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                required
+              />
+              <Input
+                label="Time"
+                type="time"
+                value={form.startTime}
+                onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                className="w-28"
+              />
+            </div>
+            <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+              <Input
+                label="End Date"
+                type="date"
+                value={form.endDate}
+                onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                required
+              />
+              <Input
+                label="Time"
+                type="time"
+                value={form.endTime}
+                onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                className="w-28"
+              />
+            </div>
           </div>
           {formError && <p className="text-sm text-red-400">{formError}</p>}
           <ModalFooter>

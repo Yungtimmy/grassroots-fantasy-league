@@ -197,11 +197,19 @@ export default function DashboardPage() {
                     month: "short",
                     day: "numeric",
                   })}{" "}
+                  {new Date(data.nextGameweek.startDate).toLocaleTimeString("en-NG", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}{" "}
                   –{" "}
                   {new Date(data.nextGameweek.deadline).toLocaleDateString("en-NG", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
+                  })}{" "}
+                  {new Date(data.nextGameweek.deadline).toLocaleTimeString("en-NG", {
+                    hour: "2-digit",
+                    minute: "2-digit",
                   })}
                 </p>
               )}
