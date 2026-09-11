@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import Script from "next/script";
 
 interface LeagueDetail {
   id: string;
@@ -221,6 +222,7 @@ export default function LeagueDetailPage() {
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
+      <Script src="https://checkout.flutterwave.com/v3.js" strategy="lazyOnload" />
       {/* Header Bar */}
       <div className="sticky top-0 z-10 border-b border-surface-200 dark:border-surface-800 bg-white/80 dark:bg-surface-950/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-lg items-center justify-between px-4">
