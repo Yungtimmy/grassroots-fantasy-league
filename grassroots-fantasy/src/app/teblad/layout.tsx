@@ -8,17 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", href: "/admin", icon: "📊" },
-  { label: "Leagues", href: "/admin/leagues", icon: "🏆" },
-  { label: "Universities", href: "/admin/universities", icon: "🏫" },
-  { label: "Seasons", href: "/admin/seasons", icon: "📅" },
-  { label: "Clubs", href: "/admin/clubs", icon: "🛡️" },
-  { label: "Players", href: "/admin/players", icon: "⚽" },
-  { label: "Gameweeks", href: "/admin/gameweeks", icon: "📆" },
-  { label: "Fixtures", href: "/admin/matches", icon: "🏟️" },
-  { label: "Scoring", href: "/admin/scoring", icon: "🎯" },
-  { label: "Payments", href: "/admin/payments", icon: "💰" },
-  { label: "Users", href: "/admin/users", icon: "👥" },
+  { label: "Dashboard", href: "/teblad", icon: "📊" },
+  { label: "Leagues", href: "/teblad/leagues", icon: "🏆" },
+  { label: "Universities", href: "/teblad/universities", icon: "🏫" },
+  { label: "Seasons", href: "/teblad/seasons", icon: "📅" },
+  { label: "Clubs", href: "/teblad/clubs", icon: "🛡️" },
+  { label: "Players", href: "/teblad/players", icon: "⚽" },
+  { label: "Gameweeks", href: "/teblad/gameweeks", icon: "📆" },
+  { label: "Fixtures", href: "/teblad/matches", icon: "🏟️" },
+  { label: "Scoring", href: "/teblad/scoring", icon: "🎯" },
+  { label: "Payments", href: "/teblad/payments", icon: "💰" },
+  { label: "Users", href: "/teblad/users", icon: "👥" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -140,7 +140,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
           {NAV_ITEMS.map((item) => {
             const isActive =
-              item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+              item.href === "/teblad" ? pathname === "/teblad" : pathname.startsWith(item.href);
             return (
               <Link
                 key={item.href}

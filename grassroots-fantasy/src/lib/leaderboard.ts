@@ -39,6 +39,39 @@ export class LeaderboardService {
     leaderboard.sort((a, b) => b.totalPoints - a.totalPoints);
     leaderboard.forEach((entry, i) => { entry.rank = i + 1; });
 
+    const latestFinished = await prisma.gameweek.findFirst({
+      where: { seasonId, status: 'finished' },
+      orderBy: { number: 'desc' },
+    });
+
+    if (latestFinished) {
+      const gwPointsAgg = await prisma.fantasyPointTransaction.groupBy({
+        by: ['userId'],
+        where: {
+          gameweekId: latestFinished.id,
+          userId: { in: leaderboard.map(e => e.userId) },
+        },
+        _sum: { totalPoints: true },
+      });
+
+      const gwLookup: Record<string, number> = {};
+      for (const agg of gwPointsAgg) {
+        gwLookup[agg.userId] = agg._sum.totalPoints ?? 0;
+      }
+
+      const prevEntries = leaderboard.map(e => ({
+        userId: e.userId,
+        prevPoints: e.totalPoints - (gwLookup[e.userId] ?? 0),
+      }));
+      prevEntries.sort((a, b) => b.prevPoints - a.prevPoints);
+      const prevRankMap: Record<string, number> = {};
+      prevEntries.forEach((e, i) => { prevRankMap[e.userId] = i + 1; });
+
+      for (const entry of leaderboard) {
+        entry.movement = (prevRankMap[entry.userId] ?? entry.rank) - entry.rank;
+      }
+    }
+
     return leaderboard;
   }
 
@@ -50,12 +83,9 @@ export class LeaderboardService {
         league: { include: { university: { select: { id: true, shortName: true, slug: true } } } },
       },
       orderBy: { totalPoints: 'desc' },
-      take: limit,
-      skip: offset,
     });
 
-    return teams.map((team, i) => ({
-      rank: offset + i + 1,
+    const allEntries = teams.map((team) => ({
       userId: team.user.id,
       username: team.user.username,
       name: team.user.name,
@@ -64,8 +94,56 @@ export class LeaderboardService {
       university: team.league.university.shortName,
       universitySlug: team.league.university.slug,
       totalPoints: team.totalPoints,
+    }));
+
+    const latestFinished = await prisma.gameweek.findFirst({
+      where: { seasonId, status: 'finished' },
+      orderBy: { number: 'desc' },
+    });
+
+    let movementMap: Record<string, number> = {};
+    if (latestFinished) {
+      const gwPointsAgg = await prisma.fantasyPointTransaction.groupBy({
+        by: ['userId'],
+        where: { gameweekId: latestFinished.id },
+        _sum: { totalPoints: true },
+      });
+
+      const gwPointsLookup: Record<string, number> = {};
+      for (const agg of gwPointsAgg) {
+        gwPointsLookup[agg.userId] = agg._sum.totalPoints ?? 0;
+      }
+
+      const prevEntries = allEntries.map((e) => ({
+        ...e,
+        prevPoints: e.totalPoints - (gwPointsLookup[e.userId] ?? 0),
+      }));
+      prevEntries.sort((a, b) => b.prevPoints - a.prevPoints);
+      const prevRankMap: Record<string, number> = {};
+      prevEntries.forEach((e, i) => { prevRankMap[e.userId] = i + 1; });
+
+      const currentRankMap: Record<string, number> = {};
+      allEntries.forEach((e, i) => { currentRankMap[e.userId] = i + 1; });
+
+      for (const e of allEntries) {
+        movementMap[e.userId] = (prevRankMap[e.userId] ?? e.totalPoints) - (currentRankMap[e.userId] ?? e.totalPoints);
+      }
+    }
+
+    const paginated = allEntries.slice(offset, offset + limit);
+
+    return paginated.map((team, i) => ({
+      rank: offset + i + 1,
+      userId: team.userId,
+      username: team.username,
+      name: team.name,
+      avatar: team.avatar,
+      teamName: team.teamName,
+      university: team.university,
+      universitySlug: team.universitySlug,
+      totalPoints: team.totalPoints,
       gameweekPoints: 0,
-      movement: 0,
+      movement: movementMap[team.userId] ?? 0,
     }));
   }
 

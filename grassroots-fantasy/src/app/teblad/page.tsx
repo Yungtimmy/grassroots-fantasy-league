@@ -46,7 +46,7 @@ export default function AdminDashboardPage() {
     setResetting(true);
     setResetMessage("");
     try {
-      const res = await fetch("/api/admin/reset-test", { method: "POST" });
+      const res = await fetch("/api/teblad/reset-test", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         const d = data.details;
@@ -65,8 +65,8 @@ export default function AdminDashboardPage() {
     async function fetchData() {
       try {
         const [statsRes, usersRes] = await Promise.all([
-          fetch("/api/admin/stats"),
-          fetch("/api/admin/users?limit=10&sort=createdAt&order=desc"),
+          fetch("/api/teblad/stats"),
+          fetch("/api/teblad/users?limit=10&sort=createdAt&order=desc"),
         ]);
 
         if (statsRes.ok) {
@@ -151,22 +151,22 @@ export default function AdminDashboardPage() {
         </div>
         <div className="p-6">
           <div className="flex flex-wrap gap-3">
-            <Link href="/admin/seasons">
+            <Link href="/teblad/seasons">
               <Button variant="primary" size="sm">1. Season</Button>
             </Link>
-            <Link href="/admin/universities">
+            <Link href="/teblad/universities">
               <Button variant="secondary" size="sm">2. Universities</Button>
             </Link>
-            <Link href="/admin/clubs">
+            <Link href="/teblad/clubs">
               <Button variant="secondary" size="sm">3. Clubs</Button>
             </Link>
-            <Link href="/admin/players">
+            <Link href="/teblad/players">
               <Button variant="secondary" size="sm">4. Players</Button>
             </Link>
-            <Link href="/admin/gameweeks">
+            <Link href="/teblad/gameweeks">
               <Button variant="outline" size="sm">5. Gameweeks</Button>
             </Link>
-            <Link href="/admin/matches">
+            <Link href="/teblad/matches">
               <Button variant="outline" size="sm">6. Fixtures</Button>
             </Link>
           </div>

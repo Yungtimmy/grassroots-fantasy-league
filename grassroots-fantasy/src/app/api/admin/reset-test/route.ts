@@ -6,10 +6,11 @@ export async function POST() {
   try {
     await requireAdmin();
 
-    const [txCount, squadCount, matchCount, gwCount] = await prisma.$transaction([
+    const [txCount, squadCount, statsCount, matchCount, gwCount] = await prisma.$transaction([
       prisma.fantasyPointTransaction.deleteMany({}),
       prisma.fantasyTeamPlayer.deleteMany({}),
       prisma.fantasyTeam.deleteMany({}),
+      prisma.playerMatchStatistic.deleteMany({}),
       prisma.match.deleteMany({}),
       prisma.gameweek.deleteMany({}),
     ]);
@@ -25,6 +26,7 @@ export async function POST() {
         pointTransactions: txCount.count,
         squadPlayers: squadCount.count,
         teams: squadCount.count,
+        playerStats: statsCount.count,
         matches: matchCount.count,
         gameweeks: gwCount.count,
       },

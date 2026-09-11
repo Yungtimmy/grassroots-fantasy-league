@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useAuth } from "@/components/layout/auth-provider";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 interface Gameweek {
@@ -28,31 +26,14 @@ interface Match {
   status: string;
 }
 
-interface PlayerBreakdown {
-  name: string;
-  position: string;
-  goals: number;
-  assists: number;
-  cleanSheet: boolean;
-  yellowCards: number;
-  redCards: number;
-  points: number;
-}
-
-type Tab = "overview" | "fixtures" | "live" | "ended";
+type Tab = "fixtures" | "live" | "ended";
 
 export default function GameweekPage() {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [activeTab, setActiveTab] = useState<Tab>("fixtures");
   const [gameweeks, setGameweeks] = useState<Gameweek[]>([]);
   const [selectedGW, setSelectedGW] = useState<Gameweek | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
-  const [myPoints, setMyPoints] = useState(0);
-  const [overallPoints, setOverallPoints] = useState(0);
-  const [leagueRank, setLeagueRank] = useState(0);
-  const [rankChange, setRankChange] = useState(0);
-  const [playerBreakdown, setPlayerBreakdown] = useState<PlayerBreakdown[]>([]);
 
   const fetchGameweeks = useCallback(async () => {
     try {
@@ -78,23 +59,6 @@ export default function GameweekPage() {
     }
   }, []);
 
-  const fetchMyPoints = useCallback(async (gwId: string) => {
-    try {
-      const res = await fetch(`/api/leaderboard/gameweek?gameweekId=${gwId}`);
-      const data = await res.json();
-      const board = data.data?.leaderboard ?? [];
-      const me = board.find((e: any) => e.userId === user?.id);
-      if (me) {
-        setMyPoints(me.gwPoints ?? 0);
-        setOverallPoints(me.totalPoints ?? 0);
-        setLeagueRank(me.rank ?? 0);
-        setRankChange(me.movement ?? 0);
-      }
-    } catch {
-      // silent
-    }
-  }, [user]);
-
   // Initial load
   useEffect(() => {
     fetchGameweeks().then((gws) => {
@@ -103,13 +67,12 @@ export default function GameweekPage() {
     });
   }, [fetchGameweeks]);
 
-  // Fetch matches + points when gameweek selected
+  // Fetch matches when gameweek selected
   useEffect(() => {
     if (selectedGW) {
       fetchMatches(selectedGW.id);
-      if (user) fetchMyPoints(selectedGW.id);
     }
-  }, [selectedGW, user, fetchMatches, fetchMyPoints]);
+  }, [selectedGW, fetchMatches]);
 
   // Auto-refresh every 30s to pick up live/finished status changes
   useEffect(() => {
@@ -210,7 +173,7 @@ export default function GameweekPage() {
 
         {/* Tabs */}
         <div className="mb-4 flex gap-1 rounded-xl bg-surface-100 dark:bg-surface-800 p-1">
-          {(["overview", "fixtures", "live", "ended"] as Tab[]).map((tab) => (
+          {(["fixtures", "live", "ended"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -263,79 +226,6 @@ export default function GameweekPage() {
                 </p>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Overview Tab */}
-        {activeTab === "overview" && (
-          <div className="space-y-4">
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-surface-200 dark:border-surface-700/50 bg-white dark:bg-surface-800/80 p-3 text-center">
-                <p className="text-[10px] uppercase text-surface-500">Your Points</p>
-                <p className="mt-1 font-display text-2xl font-bold text-brand-500">{myPoints}</p>
-              </div>
-              <div className="rounded-xl border border-surface-200 dark:border-surface-700/50 bg-white dark:bg-surface-800/80 p-3 text-center">
-                <p className="text-[10px] uppercase text-surface-500">Overall Points</p>
-                <p className="mt-1 font-display text-2xl font-bold text-surface-900 dark:text-white">{overallPoints}</p>
-              </div>
-              <div className="rounded-xl border border-surface-200 dark:border-surface-700/50 bg-white dark:bg-surface-800/80 p-3 text-center">
-                <p className="text-[10px] uppercase text-surface-500">League Rank</p>
-                <p className="mt-1 font-display text-2xl font-bold text-surface-900 dark:text-white">#{leagueRank || "—"}</p>
-              </div>
-              <div className="rounded-xl border border-surface-200 dark:border-surface-700/50 bg-white dark:bg-surface-800/80 p-3 text-center">
-                <p className="text-[10px] uppercase text-surface-500">Rank Change</p>
-                <div className="mt-1 flex items-center justify-center gap-1">
-                  {rankChange > 0 ? (
-                    <span className="font-display text-2xl font-bold text-green-500">↑{rankChange}</span>
-                  ) : rankChange < 0 ? (
-                    <span className="font-display text-2xl font-bold text-red-500">↓{Math.abs(rankChange)}</span>
-                  ) : (
-                    <span className="font-display text-2xl font-bold text-surface-400">—</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Fixtures Summary */}
-            <div className="rounded-2xl border border-surface-200 dark:border-surface-700/50 bg-white dark:bg-surface-800/80 p-4">
-              <h3 className="mb-3 font-display text-sm font-semibold text-surface-900 dark:text-white">
-                Fixtures & Matches
-              </h3>
-              {matches.length === 0 ? (
-                <p className="text-center text-sm text-surface-400 py-4">No matches scheduled</p>
-              ) : (
-                <div className="space-y-2">
-                  {matches.slice(0, 5).map((match) => (
-                    <MatchCard key={match.id} match={match} compact />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Player Points Breakdown */}
-            {playerBreakdown.length > 0 && (
-              <div className="rounded-2xl border border-surface-200 dark:border-surface-700/50 bg-white dark:bg-surface-800/80 p-4">
-                <h3 className="mb-3 font-display text-sm font-semibold text-surface-900 dark:text-white">
-                  Player Points Breakdown
-                </h3>
-                <div className="space-y-2">
-                  {playerBreakdown.map((p, i) => (
-                    <div key={i} className="flex items-center justify-between rounded-lg bg-surface-50 dark:bg-surface-900/50 px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={p.position as any} className="text-[10px]">{p.position}</Badge>
-                        <span className="text-sm text-surface-900 dark:text-white">{p.name}</span>
-                      </div>
-                      <span className="text-sm font-semibold text-brand-500">{p.points} pts</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex items-center justify-between border-t border-surface-200 dark:border-surface-700 pt-3">
-                  <span className="text-sm font-semibold text-surface-900 dark:text-white">Total</span>
-                  <span className="text-lg font-bold text-brand-500">{myPoints}</span>
-                </div>
-              </div>
-            )}
           </div>
         )}
 

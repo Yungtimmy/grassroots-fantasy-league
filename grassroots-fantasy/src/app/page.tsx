@@ -67,13 +67,13 @@ export default async function HomePage() {
                 href="/auth/register"
                 className="inline-flex h-12 items-center gap-2 rounded-xl bg-brand-400 px-7 text-sm font-semibold text-black shadow-lg shadow-brand-400/25 transition-all hover:bg-brand-500"
               >
-                Join your university
+                Sign Up
               </Link>
               <Link
                 href="/auth/login"
                 className="inline-flex h-12 items-center gap-2 rounded-xl border border-gray-700 px-7 text-sm font-semibold text-gray-300 transition-all hover:border-gray-500 hover:bg-gray-800"
               >
-                Sign in
+                Sign In
               </Link>
             </div>
           </div>

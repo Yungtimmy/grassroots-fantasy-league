@@ -185,12 +185,12 @@ MagneticButton.displayName = "MagneticButton";
 
 const MarqueeItem = () => (
   <div className="flex items-center space-x-12 px-6">
-    <span>University Rivalries</span> <span className="text-brand-400">⚽</span>
-    <span>National Leaderboard</span> <span className="text-accent-500">⚽</span>
-    <span>Fantasy Tactics</span> <span className="text-brand-400">⚽</span>
-    <span>Squad Building</span> <span className="text-accent-500">⚽</span>
-    <span>Live Scoring</span> <span className="text-brand-400">⚽</span>
-    <span>Represent Your School</span> <span className="text-accent-500">⚽</span>
+    <span>University Rivalries</span> <img src="/logo.png" alt="" className="h-5 w-auto" />
+    <span>National Leaderboard</span> <img src="/logo.png" alt="" className="h-5 w-auto" />
+    <span>Fantasy Tactics</span> <img src="/logo.png" alt="" className="h-5 w-auto" />
+    <span>Squad Building</span> <img src="/logo.png" alt="" className="h-5 w-auto" />
+    <span>Live Scoring</span> <img src="/logo.png" alt="" className="h-5 w-auto" />
+    <span>Represent Your School</span> <img src="/logo.png" alt="" className="h-5 w-auto" />
   </div>
 );
 
@@ -293,25 +293,6 @@ export function CinematicFooter() {
                   </svg>
                   Get Started Free
                 </MagneticButton>
-
-                <MagneticButton as="a" href="/auth/login" className="footer-glass-pill px-10 py-5 rounded-full text-foreground font-bold text-sm md:text-base flex items-center gap-3 group">
-                  <svg className="w-6 h-6 text-muted-foreground group-hover:text-foreground transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                  </svg>
-                  Sign In
-                </MagneticButton>
-              </div>
-
-              <div className="flex flex-wrap justify-center gap-3 md:gap-6 w-full mt-2">
-                <MagneticButton as="a" href="#" className="footer-glass-pill px-6 py-3 rounded-full text-muted-foreground font-medium text-xs md:text-sm hover:text-foreground">
-                  How It Works
-                </MagneticButton>
-                <MagneticButton as="a" href="#" className="footer-glass-pill px-6 py-3 rounded-full text-muted-foreground font-medium text-xs md:text-sm hover:text-foreground">
-                  Leaderboard
-                </MagneticButton>
-                <MagneticButton as="a" href="#" className="footer-glass-pill px-6 py-3 rounded-full text-muted-foreground font-medium text-xs md:text-sm hover:text-foreground">
-                  Support
-                </MagneticButton>
               </div>
             </div>
           </div>
@@ -323,7 +304,7 @@ export function CinematicFooter() {
 
             <div className="footer-glass-pill px-6 py-3 rounded-full flex items-center gap-2 order-1 md:order-2 cursor-default border-border/50">
               <span className="text-muted-foreground text-[10px] md:text-xs font-bold uppercase tracking-widest">Represent your</span>
-              <span className="animate-footer-heartbeat text-sm md:text-base text-brand-400">⚽</span>
+              <img src="/logo.png" alt="" className="h-4 w-auto animate-footer-heartbeat" />
               <span className="text-foreground font-black text-xs md:text-sm tracking-normal ml-1">University</span>
             </div>
 

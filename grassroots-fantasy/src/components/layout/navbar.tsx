@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "./auth-provider";
 
@@ -17,7 +17,6 @@ const signedInLinks = [
 export function Navbar() {
   const { user, loading, logout } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -46,10 +45,10 @@ export function Navbar() {
     };
   }, [mobileOpen]);
 
-  async function handleLogout() {
+  function handleLogout() {
     setDropdownOpen(false);
-    await logout();
-    router.push("/");
+    logout();
+    window.location.href = "/";
   }
 
   if (!user) return null;

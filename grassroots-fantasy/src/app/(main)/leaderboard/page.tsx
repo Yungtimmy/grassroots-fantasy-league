@@ -9,7 +9,6 @@ interface LeaderboardEntry {
   playerName: string
   university: string
   points: number
-  gwPoints: number
   movement: number
 }
 
@@ -28,22 +27,21 @@ export default function LeaderboardPage() {
   const perPage = 25
 
   const fetchData = useCallback(async (seasonId: string) => {
-    const res = await fetch(`/api/leaderboard/grassroots?seasonId=${seasonId}&limit=${perPage}&offset=${(page - 1) * perPage}`)
+    const res = await fetch(`/api/leaderboard/grassroots?seasonId=${seasonId}&limit=100&offset=0`)
     if (res.ok) {
       const json = await res.json()
       const items = json.data?.items ?? []
       setData(
-        items.map((e: { rank: number; name: string; university: string; totalPoints: number; gameweekPoints: number; movement: number }) => ({
+        items.map((e: { rank: number; name: string; university: string; totalPoints: number; movement: number }) => ({
           rank: e.rank,
           playerName: e.name,
           university: e.university,
           points: e.totalPoints,
-          gwPoints: e.gameweekPoints,
           movement: e.movement ?? 0,
         }))
       )
     }
-  }, [page])
+  }, [])
 
   useEffect(() => {
     fetch("/api/seasons")
@@ -63,6 +61,10 @@ export default function LeaderboardPage() {
     fetchData(selectedSeason).finally(() => setLoading(false))
   }, [selectedSeason, fetchData])
 
+  const top3 = data.slice(0, 3)
+  const rest = data.slice(3)
+  const paginatedRest = rest.slice((page - 1) * perPage, page * perPage)
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -76,14 +78,60 @@ export default function LeaderboardPage() {
         />
       </div>
 
+      {/* Podium */}
+      {loading ? (
+        <div className="mb-8 grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+              <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-white/10 animate-pulse" />
+              <div className="mx-auto mb-2 h-4 w-20 rounded bg-white/10 animate-pulse" />
+              <div className="mx-auto h-3 w-12 rounded bg-white/10 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      ) : top3.length > 0 ? (
+        <div className="mb-8 grid grid-cols-3 gap-4">
+          {/* 2nd */}
+          <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-gray-300/20 text-2xl font-bold text-gray-300">
+              2
+            </div>
+            <p className="text-sm font-semibold text-white">{top3[1]?.playerName ?? "—"}</p>
+            <p className="mt-0.5 text-xs text-gray-400">{top3[1]?.university ?? ""}</p>
+            <p className="mt-2 font-display text-xl font-bold text-white">{top3[1]?.points ?? 0}</p>
+            <p className="text-[10px] uppercase text-gray-500">points</p>
+          </div>
+          {/* 1st */}
+          <div className="flex flex-col items-center rounded-2xl border border-yellow-500/30 bg-yellow-500/5 p-6 text-center">
+            <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-yellow-400/20 text-3xl font-bold text-yellow-400">
+              1
+            </div>
+            <p className="text-sm font-semibold text-white">{top3[0]?.playerName ?? "—"}</p>
+            <p className="mt-0.5 text-xs text-gray-400">{top3[0]?.university ?? ""}</p>
+            <p className="mt-2 font-display text-2xl font-bold text-yellow-400">{top3[0]?.points ?? 0}</p>
+            <p className="text-[10px] uppercase text-gray-500">points</p>
+          </div>
+          {/* 3rd */}
+          <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-amber-600/20 text-2xl font-bold text-amber-600">
+              3
+            </div>
+            <p className="text-sm font-semibold text-white">{top3[2]?.playerName ?? "—"}</p>
+            <p className="mt-0.5 text-xs text-gray-400">{top3[2]?.university ?? ""}</p>
+            <p className="mt-2 font-display text-xl font-bold text-white">{top3[2]?.points ?? 0}</p>
+            <p className="text-[10px] uppercase text-gray-500">points</p>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
-        <table className="w-full min-w-[600px]">
+        <table className="w-full min-w-[500px]">
           <thead>
             <tr className="border-b border-white/10 bg-white/5">
               <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">Rank</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-400">Manager</th>
               <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-400">Total Points</th>
-              <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-400">GW Points</th>
               <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-400">Trend</th>
             </tr>
           </thead>
@@ -94,16 +142,17 @@ export default function LeaderboardPage() {
                   <td className="px-6 py-4"><div className="h-4 w-6 rounded bg-white/10 animate-pulse" /></td>
                   <td className="px-6 py-4"><div className="h-4 w-28 rounded bg-white/10 animate-pulse" /></td>
                   <td className="px-6 py-4 text-right"><div className="h-4 w-10 ml-auto rounded bg-white/10 animate-pulse" /></td>
-                  <td className="px-6 py-4 text-right"><div className="h-4 w-8 ml-auto rounded bg-white/10 animate-pulse" /></td>
                   <td className="px-6 py-4 text-center"><div className="h-4 w-6 mx-auto rounded bg-white/10 animate-pulse" /></td>
                 </tr>
               ))
-            ) : data.length === 0 ? (
+            ) : paginatedRest.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-400">No data available.</td>
+                <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
+                  {data.length === 0 ? "No data available." : "No more entries."}
+                </td>
               </tr>
             ) : (
-              data.map((entry) => {
+              paginatedRest.map((entry) => {
                 const isYou = user && entry.playerName === user.name
                 return (
                   <tr
@@ -112,15 +161,7 @@ export default function LeaderboardPage() {
                       isYou ? "bg-brand-500/10" : ""
                     }`}
                   >
-                    <td className="px-6 py-4 text-sm font-medium">
-                      {entry.rank <= 3 ? (
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-500/20 text-xs font-bold text-brand-400">
-                          {entry.rank}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">{entry.rank}</span>
-                      )}
-                    </td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-400">{entry.rank}</td>
                     <td className="px-6 py-4 text-sm font-medium text-white">
                       {entry.playerName}
                       {isYou && (
@@ -129,9 +170,6 @@ export default function LeaderboardPage() {
                     </td>
                     <td className="px-6 py-4 text-right font-mono text-sm font-semibold text-white">
                       {entry.points}
-                    </td>
-                    <td className="px-6 py-4 text-right font-mono text-sm text-brand-400">
-                      {entry.gwPoints}
                     </td>
                     <td className="px-6 py-4 text-center text-sm">
                       {entry.movement > 0 && (
@@ -162,7 +200,7 @@ export default function LeaderboardPage() {
         </table>
       </div>
 
-      {data.length >= perPage && (
+      {rest.length > perPage && (
         <div className="mt-4 flex justify-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -174,7 +212,7 @@ export default function LeaderboardPage() {
           <span className="px-4 py-2 text-sm text-gray-400">Page {page}</span>
           <button
             onClick={() => setPage((p) => p + 1)}
-            disabled={data.length < perPage}
+            disabled={page * perPage >= rest.length}
             className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition-colors hover:bg-white/10 disabled:opacity-50"
           >
             Next
