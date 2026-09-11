@@ -15,9 +15,10 @@ export async function POST(request: NextRequest) {
 
     await setAdminCookie();
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
+    console.error("Unlock error:", error);
     return NextResponse.json(
-      { success: false, error: "Could not unlock admin" },
+      { success: false, error: error instanceof Error ? error.message : "Could not unlock admin" },
       { status: 500 }
     );
   }

@@ -46,7 +46,7 @@ export default function AdminDashboardPage() {
     setResetting(true);
     setResetMessage("");
     try {
-      const res = await fetch("/api/teblad/reset-test", { method: "POST" });
+      const res = await fetch("/api/admin/reset-test", { method: "POST", credentials: "include" });
       const data = await res.json();
       if (data.success) {
         const d = data.details;
@@ -65,8 +65,8 @@ export default function AdminDashboardPage() {
     async function fetchData() {
       try {
         const [statsRes, usersRes] = await Promise.all([
-          fetch("/api/teblad/stats"),
-          fetch("/api/teblad/users?limit=10&sort=createdAt&order=desc"),
+          fetch("/api/admin/stats"),
+          fetch("/api/admin/users?limit=10&sort=createdAt&order=desc"),
         ]);
 
         if (statsRes.ok) {

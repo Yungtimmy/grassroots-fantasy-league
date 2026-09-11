@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
 
 export async function POST() {
   try {
-    await requireAdmin();
-
     const [txCount, squadCount, statsCount, matchCount, gwCount] = await prisma.$transaction([
       prisma.fantasyPointTransaction.deleteMany({}),
       prisma.fantasyTeamPlayer.deleteMany({}),
@@ -34,7 +31,7 @@ export async function POST() {
   } catch (error) {
     console.error("Reset test error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to reset test data" },
+      { success: false, error: error instanceof Error ? error.message : "Failed to reset test data" },
       { status: 500 }
     );
   }

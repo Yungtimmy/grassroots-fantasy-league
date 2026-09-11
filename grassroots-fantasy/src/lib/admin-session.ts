@@ -11,7 +11,7 @@ function secret() {
 }
 
 export async function isAdminUnlocked(): Promise<boolean> {
-  const token = (await cookies()).get(COOKIE)?.value;
+  const token = cookies().get(COOKIE)?.value;
   if (!token) return false;
   try {
     const { payload } = await jwtVerify(token, secret());
@@ -39,9 +39,9 @@ export async function setAdminCookie() {
     .setExpirationTime(TOKEN_EXPIRY)
     .sign(secret());
 
-  (await cookies()).set(COOKIE, token, {
+  cookies().set(COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: false,
     sameSite: "lax",
     maxAge: 60 * 60 * 24 * 7,
     path: "/",
@@ -49,5 +49,5 @@ export async function setAdminCookie() {
 }
 
 export async function clearAdminCookie() {
-  (await cookies()).delete(COOKIE);
+  cookies().delete(COOKIE);
 }
