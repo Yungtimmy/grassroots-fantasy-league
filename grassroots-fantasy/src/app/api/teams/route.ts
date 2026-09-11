@@ -104,11 +104,11 @@ export async function GET() {
       return NextResponse.json({ success: true, data: null });
     }
 
-    // Get current active/upcoming gameweek for per-player GW points
+    // Get gameweek for per-player GW points (most recent with any status)
     const season = await getCurrentSeason();
     const activeGw = season ? await prisma.gameweek.findFirst({
-      where: { seasonId: season.id, status: { in: ["upcoming", "active"] } },
-      orderBy: { number: "asc" },
+      where: { seasonId: season.id },
+      orderBy: { number: "desc" },
     }) : null;
 
     // Fetch gameweek points per player

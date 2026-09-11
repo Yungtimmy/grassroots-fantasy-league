@@ -137,12 +137,17 @@ export async function PUT(
     }
 
     // Auto-run scoring after saving stats
-    const match = await prisma.match.findUnique({
-      where: { id: matchId },
-      select: { gameweekId: true },
-    });
-    if (match) {
-      await ScoringService.calculateAllPoints(matchId, match.gameweekId);
+    try {
+      const match = await prisma.match.findUnique({
+        where: { id: matchId },
+        select: { gameweekId: true },
+      });
+      if (match) {
+        await ScoringService.calculateAllPoints(matchId, match.gameweekId);
+      }
+    } catch (scoringError) {
+      console.error("Auto-scoring failed:", scoringError);
+      // Don't fail the request, stats were saved
     }
 
     return NextResponse.json({ success: true });

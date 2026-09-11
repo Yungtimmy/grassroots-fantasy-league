@@ -86,8 +86,9 @@ export async function GET() {
       : null;
 
     let gameweekPoints = 0;
+    // Get latest gameweek that has any transactions
     const lastGameweek = await prisma.gameweek.findFirst({
-      where: { seasonId: season.id, status: "finished" },
+      where: { seasonId: season.id },
       orderBy: { number: "desc" },
     });
     if (lastGameweek) {
