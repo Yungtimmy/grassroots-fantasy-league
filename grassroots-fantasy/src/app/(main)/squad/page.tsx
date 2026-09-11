@@ -143,6 +143,67 @@ export default function SquadPage() {
     setSuccess("");
   }
 
+  const loadSquad = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch("/api/teams");
+      const data = await res.json();
+      const team = data.data;
+      if (!team?.players?.length) return;
+      if (team.formation) setFormation(team.formation);
+      const startingSlots = emptyStarting(team.formation || "4-4-2");
+      const subSlots = emptySubs();
+      const startingPlayers = team.players.filter((p: { isStarting: boolean }) => p.isStarting);
+      const benchPlayers = team.players.filter((p: { isStarting: boolean }) => !p.isStarting);
+
+      for (const tp of startingPlayers) {
+        const player: MarketPlayer = {
+          id: tp.player.id,
+          name: tp.player.name,
+          position: tp.player.position,
+          price: tp.player.price,
+          totalPoints: tp.player.totalPoints,
+          photo: tp.player.photo,
+          realTeam: tp.player.realTeam,
+        };
+        const idx = startingSlots.findIndex((s) => s.position === player.position && !s.player);
+        if (idx >= 0) {
+          startingSlots[idx] = {
+            ...startingSlots[idx],
+            player,
+            isCaptain: tp.isCaptain,
+            isViceCaptain: tp.isViceCaptain,
+          };
+        }
+      }
+
+      benchPlayers.forEach((tp: { player: MarketPlayer; isCaptain: boolean; isViceCaptain: boolean }, i: number) => {
+        if (i >= subSlots.length) return;
+        subSlots[i] = {
+          ...subSlots[i],
+          player: {
+            id: tp.player.id,
+            name: tp.player.name,
+            position: tp.player.position,
+            price: tp.player.price,
+            totalPoints: tp.player.totalPoints,
+            photo: tp.player.photo,
+            realTeam: tp.player.realTeam,
+          },
+          isCaptain: tp.isCaptain,
+          isViceCaptain: tp.isViceCaptain,
+        };
+      });
+
+      setStarters(startingSlots);
+      setSubs(subSlots);
+    } catch {
+      // silent
+    } finally {
+      setTeamLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
     fetch("/api/user/dashboard")
@@ -155,70 +216,16 @@ export default function SquadPage() {
           if (isStatusLocked || isDeadlinePassed) {
             setGameweekLocked(true);
             setActiveGwNumber(gw.number);
+            loadSquad();
           }
         }
       })
       .catch(() => {});
-  }, [user]);
+  }, [user, loadSquad]);
 
   useEffect(() => {
-    if (!user) return;
-    fetch("/api/teams")
-      .then((res) => res.json())
-      .then((data) => {
-        const team = data.data;
-        if (!team?.players?.length) return;
-        if (team.formation) setFormation(team.formation);
-        const startingSlots = emptyStarting(team.formation || "4-4-2");
-        const subSlots = emptySubs();
-        const startingPlayers = team.players.filter((p: { isStarting: boolean }) => p.isStarting);
-        const benchPlayers = team.players.filter((p: { isStarting: boolean }) => !p.isStarting);
-
-        for (const tp of startingPlayers) {
-          const player: MarketPlayer = {
-            id: tp.player.id,
-            name: tp.player.name,
-            position: tp.player.position,
-            price: tp.player.price,
-            totalPoints: tp.player.totalPoints,
-            photo: tp.player.photo,
-            realTeam: tp.player.realTeam,
-          };
-          const idx = startingSlots.findIndex((s) => s.position === player.position && !s.player);
-          if (idx >= 0) {
-            startingSlots[idx] = {
-              ...startingSlots[idx],
-              player,
-              isCaptain: tp.isCaptain,
-              isViceCaptain: tp.isViceCaptain,
-            };
-          }
-        }
-
-        benchPlayers.forEach((tp: { player: MarketPlayer; isCaptain: boolean; isViceCaptain: boolean }, i: number) => {
-          if (i >= subSlots.length) return;
-          subSlots[i] = {
-            ...subSlots[i],
-            player: {
-              id: tp.player.id,
-              name: tp.player.name,
-              position: tp.player.position,
-              price: tp.player.price,
-              totalPoints: tp.player.totalPoints,
-              photo: tp.player.photo,
-              realTeam: tp.player.realTeam,
-            },
-            isCaptain: tp.isCaptain,
-            isViceCaptain: tp.isViceCaptain,
-          };
-        });
-
-        setStarters(startingSlots);
-        setSubs(subSlots);
-      })
-      .catch(() => undefined)
-      .finally(() => setTeamLoading(false));
-  }, [user]);
+    loadSquad();
+  }, [loadSquad]);
 
   const fetchMarket = useCallback(async () => {
     setMarketLoading(true);
