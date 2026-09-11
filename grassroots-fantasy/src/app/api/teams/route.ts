@@ -104,7 +104,31 @@ export async function GET() {
       return NextResponse.json({ success: true, data: null });
     }
 
-    return NextResponse.json({ success: true, data: team });
+    // Get current active/upcoming gameweek for per-player GW points
+    const season = await getCurrentSeason();
+    const activeGw = season ? await prisma.gameweek.findFirst({
+      where: { seasonId: season.id, status: { in: ["upcoming", "active"] } },
+      orderBy: { number: "asc" },
+    }) : null;
+
+    // Fetch gameweek points per player
+    const playerIds = team.players.map((p: { player: { id: string } }) => p.player.id);
+    const gwTransactions = activeGw ? await prisma.fantasyPointTransaction.findMany({
+      where: { gameweekId: activeGw.id, playerId: { in: playerIds } },
+    }) : [];
+    const gwPointsMap = new Map(gwTransactions.map((t) => [t.playerId, t.totalPoints]));
+
+    // Enrich team data with GW points
+    const enrichedTeam = {
+      ...team,
+      gameweekId: activeGw?.id ?? null,
+      players: team.players.map((p: any) => ({
+        ...p,
+        gameweekPoints: gwPointsMap.get(p.player.id) ?? 0,
+      })),
+    };
+
+    return NextResponse.json({ success: true, data: enrichedTeam });
   } catch (error) {
     console.error("Get team error:", error);
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });

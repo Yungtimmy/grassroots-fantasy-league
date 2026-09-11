@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { ScoringService } from "@/lib/scoring";
 
 export async function GET(
   _request: NextRequest,
@@ -133,6 +134,15 @@ export async function PUT(
           goalsConceded: stat.goalsConceded ?? 0,
         },
       });
+    }
+
+    // Auto-run scoring after saving stats
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      select: { gameweekId: true },
+    });
+    if (match) {
+      await ScoringService.calculateAllPoints(matchId, match.gameweekId);
     }
 
     return NextResponse.json({ success: true });

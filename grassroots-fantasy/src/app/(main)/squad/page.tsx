@@ -108,6 +108,7 @@ export default function SquadPage() {
   const [activeSlot, setActiveSlot] = useState<{ area: "start" | "sub"; index: number } | null>(null);
   const [gameweekLocked, setGameweekLocked] = useState(false);
   const [activeGwNumber, setActiveGwNumber] = useState<number | null>(null);
+  const [playerGwPoints, setPlayerGwPoints] = useState<Map<string, number>>(new Map());
 
   const squad = useMemo(() => [...starters, ...subs], [starters, subs]);
   const usedBudget = squad.reduce((sum, s) => sum + (s.player?.price ?? 0), 0);
@@ -197,6 +198,15 @@ export default function SquadPage() {
 
       setStarters(startingSlots);
       setSubs(subSlots);
+
+      // Set gameweek points per player
+      if (team.gameweekId) {
+        const gwPoints = new Map<string, number>();
+        for (const tp of team.players) {
+          gwPoints.set(tp.player.id, tp.gameweekPoints ?? 0);
+        }
+        setPlayerGwPoints(gwPoints);
+      }
     } catch {
       // silent
     } finally {
@@ -485,7 +495,7 @@ export default function SquadPage() {
                   {row.items.map((slot) => {
                     const index = starters.indexOf(slot);
                     return (
-                      <PlayerSlot
+                       <PlayerSlot
                         key={`s-${index}`}
                         slot={slot}
                         area="start"
@@ -495,6 +505,7 @@ export default function SquadPage() {
                         onCaptain={() => setCaptain("start", index)}
                         onVice={() => setVice("start", index)}
                         onRemove={() => removeFrom("start", index)}
+                        gwPoints={slot.player ? (playerGwPoints.get(slot.player.id) ?? 0) : 0}
                       />
                     );
                   })}
@@ -525,6 +536,7 @@ export default function SquadPage() {
                 onVice={() => {}}
                 onRemove={() => removeFrom("sub", i)}
                 compact
+                gwPoints={slot.player ? (playerGwPoints.get(slot.player.id) ?? 0) : 0}
               />
             ))}
           </div>
@@ -600,6 +612,7 @@ function PlayerSlot({
   onVice,
   onRemove,
   compact = false,
+  gwPoints = 0,
 }: {
   slot: Slot;
   area: "start" | "sub";
@@ -610,6 +623,7 @@ function PlayerSlot({
   onVice: () => void;
   onRemove: () => void;
   compact?: boolean;
+  gwPoints?: number;
 }) {
   return (
     <div
@@ -630,6 +644,13 @@ function PlayerSlot({
       {slot.isViceCaptain && (
         <div className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-sky-400 text-[8px] font-bold text-black z-10">
           V
+        </div>
+      )}
+      {slot.player && gwPoints !== 0 && (
+        <div className={`absolute -top-1.5 -left-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[8px] font-bold z-10 ${
+          gwPoints > 0 ? "bg-red-500 text-white" : "bg-surface-600 text-surface-300"
+        }`}>
+          {gwPoints > 0 ? `+${gwPoints}` : gwPoints}
         </div>
       )}
 
