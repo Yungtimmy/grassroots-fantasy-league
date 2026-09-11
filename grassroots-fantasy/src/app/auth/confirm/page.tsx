@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
-export default function AuthConfirmPage() {
+function ConfirmInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/auth/register";
@@ -101,5 +101,20 @@ export default function AuthConfirmPage() {
         <p className="text-sm text-gray-400">Completing sign in...</p>
       </div>
     </div>
+  );
+}
+
+export default function AuthConfirmPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+          <p className="text-sm text-gray-400">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ConfirmInner />
+    </Suspense>
   );
 }
