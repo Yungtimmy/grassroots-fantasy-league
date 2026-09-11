@@ -148,9 +148,14 @@ export default function SquadPage() {
     fetch("/api/user/dashboard")
       .then((res) => res.json())
       .then((data) => {
-        if (data.nextGameweek?.status === "active") {
-          setGameweekLocked(true);
-          setActiveGwNumber(data.nextGameweek.number);
+        if (data.nextGameweek) {
+          const gw = data.nextGameweek;
+          const isStatusLocked = gw.status === "active";
+          const isDeadlinePassed = new Date(gw.deadline).getTime() < Date.now();
+          if (isStatusLocked || isDeadlinePassed) {
+            setGameweekLocked(true);
+            setActiveGwNumber(gw.number);
+          }
         }
       })
       .catch(() => {});
@@ -404,7 +409,7 @@ export default function SquadPage() {
               </svg>
               <div>
                 <p className="text-sm font-semibold text-red-400">Squad Locked</p>
-                <p className="text-xs text-red-400/70">Gameweek {activeGwNumber} is active. You can edit your squad after it finishes.</p>
+                <p className="text-xs text-red-400/70">Gameweek {activeGwNumber} deadline has passed or is active. Squad changes are locked.</p>
               </div>
             </div>
           </div>
