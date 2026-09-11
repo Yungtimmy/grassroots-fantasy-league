@@ -2,7 +2,7 @@
 
 This file is the persistent brain for this repo. Read it at the start of every session. Update it at the end of every session with what changed, what is still broken, and what to do next.
 
-Last updated: 2026-09-09 (Dashboard redesign + navbar auth gating)
+Last updated: 2026-09-11 (Payment guard, N520 fee, faculty/department profile)
 
 **Git branch: `ADMIN`** (repo initialized at workspace root `cfl/`)
 
@@ -38,7 +38,7 @@ cfl/                          ← workspace root, git repo, branch ADMIN
 | Admin | Password only. Cookie `gfl-admin`. No user account. `/admin` unlock form. |
 | Student auth | bcryptjs + jose JWT cookie `gfl-token` (7 days) |
 | Payments | Mock default, Flutterwave |
-| Money | NGN, registration fee ₦500 |
+| Money | NGN, registration fee ₦520 |
 | Budget | **1000 stored = 100.0m**. Prices stored as tenths (55 = 5.5m) |
 
 ---
@@ -322,3 +322,19 @@ Paste the Supabase **connection string** (Session pooler URI) or the **database 
 - Test payment flow with Flutterwave in development mode.
 - Tests (no test framework yet).
 - Deadline lock, max-3-per-club, vice-captain fallback.
+
+### 2026-09-11 — Payment guard + fee fix + profile faculty/department
+
+**Done**
+
+- **Payment bypass fixed**: Dashboard API returns `hasPaid`. If `hasPaid === false`, dashboard page redirects to `/leagues` (prevents skipping payment by navigating directly to `/dashboard`).
+- **Flutterwave amount fixed**: Default fallback changed from 50000 (₦500) to 52000 (₦520). Server-side `registrationFee` changed from 5000 to 5200. Auto-updates existing season from 5000→5200 on payment init.
+- **Faculty/department in profile**: Profile page now has dropdown selectors for Faculty and Department (fetched from `/api/universities/{slug}/faculties` and `/api/faculties/{id}/departments`). API PATCH accepts `facultyId`/`departmentId`. GET returns `facultyId`, `departmentId`, `universitySlug`.
+
+**Still needs**
+
+- Seed Faculty/Department data for FUNAAB so dropdowns have real data.
+- Test payment flow with Flutterwave in development mode.
+- Tests (no test framework yet).
+- Deadline lock, max-3-per-club, vice-captain fallback.
+- Fix Google OAuth `bad_oauth_state` (update Supabase dashboard → Authentication → URL Configuration with Vercel domain).
