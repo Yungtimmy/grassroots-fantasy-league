@@ -6,26 +6,28 @@ export async function POST() {
   try {
     await requireAdmin();
 
-    const [txCount] = await prisma.$transaction([
+    const [txCount, squadCount, matchCount, gwCount] = await prisma.$transaction([
       prisma.fantasyPointTransaction.deleteMany({}),
+      prisma.fantasyTeamPlayer.deleteMany({}),
+      prisma.fantasyTeam.deleteMany({}),
+      prisma.match.deleteMany({}),
+      prisma.gameweek.deleteMany({}),
     ]);
 
     await prisma.$transaction([
-      prisma.fantasyTeam.updateMany({ data: { totalPoints: 0 } }),
       prisma.realPlayer.updateMany({ data: { totalPoints: 0 } }),
-      prisma.playerMatchStatistic.deleteMany({}),
-      prisma.match.updateMany({
-        data: { homeScore: null, awayScore: null, status: "upcoming" },
-      }),
-      prisma.gameweek.updateMany({
-        data: { status: "upcoming" },
-      }),
     ]);
 
     return NextResponse.json({
       success: true,
-      message: "Test data cleared. All points, match stats, and statuses reset.",
-      deletedTransactions: txCount.count,
+      message: "Test data cleared.",
+      details: {
+        pointTransactions: txCount.count,
+        squadPlayers: squadCount.count,
+        teams: squadCount.count,
+        matches: matchCount.count,
+        gameweeks: gwCount.count,
+      },
     });
   } catch (error) {
     console.error("Reset test error:", error);

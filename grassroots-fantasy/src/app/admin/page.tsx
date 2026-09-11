@@ -42,14 +42,15 @@ export default function AdminDashboardPage() {
   const [resetMessage, setResetMessage] = useState("");
 
   async function handleResetTest() {
-    if (!window.confirm("This will delete ALL scoring data, match stats, match results, and reset all gameweek statuses. Your account and squad will remain. Proceed?")) return;
+    if (!window.confirm("This will delete ALL squads, fixtures, gameweeks, scoring data, and match stats. Your account and league membership will remain. Proceed?")) return;
     setResetting(true);
     setResetMessage("");
     try {
       const res = await fetch("/api/admin/reset-test", { method: "POST" });
       const data = await res.json();
       if (data.success) {
-        setResetMessage(`Done! ${data.deletedTransactions} point transactions cleared.`);
+        const d = data.details;
+        setResetMessage(`Done! Cleared: ${d.pointTransactions} transactions, ${d.teams} teams, ${d.matches} matches, ${d.gameweeks} gameweeks.`);
       } else {
         setResetMessage("Error: " + (data.error || "Unknown error"));
       }
@@ -180,7 +181,7 @@ export default function AdminDashboardPage() {
               >
                 {resetting ? "Resetting..." : "Reset Test Data"}
               </Button>
-              <p className="text-xs text-surface-500">Clears all points, match stats, results & gameweek statuses</p>
+              <p className="text-xs text-surface-500">Clears all squads, fixtures, gameweeks, points & match stats</p>
             </div>
             {resetMessage && (
               <p className={`mt-2 text-sm ${resetMessage.startsWith("Done") ? "text-green-400" : "text-red-400"}`}>
