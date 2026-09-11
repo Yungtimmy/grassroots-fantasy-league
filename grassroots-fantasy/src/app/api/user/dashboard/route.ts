@@ -35,6 +35,7 @@ export async function GET() {
 
       return NextResponse.json({
         authenticated: false,
+        hasPaid: false,
         points: 0,
         gameweekPoints: 0,
         universityRank: 0,
@@ -55,6 +56,7 @@ export async function GET() {
     if (!season) {
       return NextResponse.json({
         authenticated: true,
+        hasPaid: false,
         points: 0,
         gameweekPoints: 0,
         universityRank: 0,
@@ -158,9 +160,15 @@ export async function GET() {
       select: { name: true, email: true },
     });
 
+    const hasPaid = await prisma.payment.findFirst({
+      where: { userId: authUser.userId, seasonId: season.id, status: "successful" },
+      select: { id: true },
+    });
+
     return NextResponse.json({
       authenticated: true,
       user: user ? { name: user.name, email: user.email } : null,
+      hasPaid: !!hasPaid,
       points: team?.totalPoints ?? 0,
       gameweekPoints,
       universityRank,

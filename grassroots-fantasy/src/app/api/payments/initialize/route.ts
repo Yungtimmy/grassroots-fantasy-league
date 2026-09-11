@@ -37,11 +37,17 @@ export async function POST(request: NextRequest) {
           endDate: new Date("2026-12-31"),
           registrationStart: new Date("2026-01-01"),
           registrationEnd: new Date("2026-12-31"),
-          registrationFee: 5000,
+          registrationFee: 5200,
           status: "active",
         },
       });
       console.log("Created season for payment:", season.id);
+    } else if (season.registrationFee === 5000) {
+      await prisma.season.update({
+        where: { id: season.id },
+        data: { registrationFee: 5200 },
+      });
+      season.registrationFee = 5200;
     }
 
     const existingPayment = await prisma.payment.findFirst({

@@ -12,13 +12,19 @@ interface ProfileData {
   role: string
   faculty: string | null
   department: string | null
+  facultyId: string | null
+  departmentId: string | null
   universityName: string | null
   universityShort: string | null
+  universitySlug: string | null
   totalPoints: number
   formation: string | null
   rank: number
   joinDate: string
 }
+
+interface Faculty { id: string; name: string }
+interface Department { id: string; name: string }
 
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth()
@@ -29,6 +35,10 @@ export default function ProfilePage() {
   const [username, setUsername] = useState("")
   const [phone, setPhone] = useState("")
   const [avatar, setAvatar] = useState("")
+  const [facultyId, setFacultyId] = useState("")
+  const [departmentId, setDepartmentId] = useState("")
+  const [faculties, setFaculties] = useState<Faculty[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [uploading, setUploading] = useState(false)
@@ -46,11 +56,28 @@ export default function ProfilePage() {
           setUsername(data.username ?? "")
           setPhone(data.phone ?? "")
           setAvatar(data.avatar ?? "")
+          setFacultyId(data.facultyId ?? "")
+          setDepartmentId(data.departmentId ?? "")
+
+          if (data.universitySlug) {
+            fetch(`/api/universities/${data.universitySlug}/faculties`)
+              .then((r) => r.json())
+              .then((d) => { if (d.success) setFaculties(d.data.faculties) })
+              .catch(() => {})
+          }
         }
       })
       .catch(() => setError("Failed to load profile"))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!facultyId) { setDepartments([]); return }
+    fetch(`/api/faculties/${facultyId}/departments`)
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setDepartments(d.data.departments) })
+      .catch(() => {})
+  }, [facultyId])
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -85,7 +112,7 @@ export default function ProfilePage() {
       const res = await fetch("/api/user/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, username, phone, avatar }),
+        body: JSON.stringify({ name, username, phone, avatar, facultyId: facultyId || null, departmentId: departmentId || null }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -211,6 +238,36 @@ export default function ProfilePage() {
                 className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
               />
             </div>
+            {faculties.length > 0 && (
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Faculty</label>
+                <select
+                  value={facultyId}
+                  onChange={(e) => { setFacultyId(e.target.value); setDepartmentId("") }}
+                  className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                >
+                  <option value="">Select Faculty</option>
+                  {faculties.map((f) => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {departments.length > 0 && (
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Department</label>
+                <select
+                  value={departmentId}
+                  onChange={(e) => setDepartmentId(e.target.value)}
+                  className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                >
+                  <option value="">Select Department</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="flex gap-3">
               <button
                 onClick={save}
@@ -226,6 +283,8 @@ export default function ProfilePage() {
                   setUsername(profile?.username || "")
                   setPhone(profile?.phone || "")
                   setAvatar(profile?.avatar || "")
+                  setFacultyId(profile?.facultyId || "")
+                  setDepartmentId(profile?.departmentId || "")
                 }}
                 className="rounded-xl bg-white/5 border border-white/10 px-5 py-2.5 text-sm text-gray-300 hover:bg-white/10 transition-colors"
               >

@@ -35,7 +35,7 @@ export async function GET() {
 
     const membership = await prisma.universityLeagueMember.findFirst({
       where: { userId: authUser.userId },
-      include: { league: { include: { university: { select: { name: true, shortName: true } } } } },
+      include: { league: { include: { university: { select: { name: true, shortName: true, slug: true } } } } },
     });
 
     const team = membership
@@ -65,10 +65,13 @@ export async function GET() {
       phone: user.phone,
       avatar: user.avatar,
       role: user.role,
+      facultyId: user.facultyId,
+      departmentId: user.departmentId,
       faculty: user.faculty?.name || null,
       department: user.department?.name || null,
       universityName: membership?.league.university.name || null,
       universityShort: membership?.league.university.shortName || null,
+      universitySlug: membership?.league.university.slug || null,
       totalPoints: team?.totalPoints ?? 0,
       formation: team?.formation || null,
       rank,
@@ -88,7 +91,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, username, phone, avatar } = body;
+    const { name, username, phone, avatar, facultyId, departmentId } = body;
 
     if (username) {
       const existing = await prisma.user.findFirst({
@@ -106,16 +109,26 @@ export async function PATCH(request: NextRequest) {
         ...(username && { username }),
         ...(phone !== undefined && { phone: phone || null }),
         ...(avatar !== undefined && { avatar: avatar || null }),
+        ...(facultyId !== undefined && { facultyId: facultyId || null }),
+        ...(departmentId !== undefined && { departmentId: departmentId || null }),
       },
       select: {
         name: true,
         username: true,
         phone: true,
         avatar: true,
+        facultyId: true,
+        departmentId: true,
+        faculty: { select: { name: true } },
+        department: { select: { name: true } },
       },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({
+      ...updated,
+      faculty: updated.faculty?.name || null,
+      department: updated.department?.name || null,
+    });
   } catch (error) {
     console.error("Update profile error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

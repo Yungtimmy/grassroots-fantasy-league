@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/layout/auth-provider"
 
 interface DashboardData {
   authenticated: boolean
   user?: { name: string; email: string } | null
+  hasPaid: boolean
   points: number
   gameweekPoints: number
   universityRank: number
@@ -78,6 +80,7 @@ function CountdownTimer({ deadline }: { deadline: string }) {
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -90,6 +93,12 @@ export default function DashboardPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!loading && data && data.authenticated && data.hasPaid === false) {
+      router.push("/leagues")
+    }
+  }, [loading, data, router])
 
   if (loading) {
     return (

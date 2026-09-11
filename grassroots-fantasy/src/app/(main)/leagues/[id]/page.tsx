@@ -113,7 +113,7 @@ export default function LeagueDetailPage() {
             (window as any).FlutterwaveCheckout({
               public_key: flutterwaveKey,
               tx_ref: paymentData.data.reference,
-              amount: league?.entryFee ?? 50000,
+              amount: league?.entryFee ?? 52000,
               currency: "NGN",
               callback: async (response: any) => {
                 await fetch("/api/payments/verify", {
