@@ -42,6 +42,8 @@ interface PlayerInMatch {
   playerId: string;
   playerName: string;
   position: string;
+  teamId: string;
+  isHome: boolean;
   minutes: number;
   goals: number;
   assists: number;
@@ -76,6 +78,8 @@ export default function MatchesPage() {
   const [resultForm, setResultForm] = useState({ homeScore: 0, awayScore: 0 });
   const [playerStats, setPlayerStats] = useState<PlayerInMatch[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [matchScores, setMatchScores] = useState<{ homeScore: number | null; awayScore: number | null }>({ homeScore: null, awayScore: null });
   const [formError, setFormError] = useState("");
 
   const fetchData = useCallback(async () => {
@@ -188,11 +192,13 @@ export default function MatchesPage() {
     setSelectedMatch(match);
     setStatsModal(true);
     setStatsLoading(true);
+    setActiveAction(null);
     try {
       const res = await fetch(`/api/admin/matches/${match.id}/stats`);
       if (res.ok) {
         const data = await res.json();
         setPlayerStats(data.data ?? []);
+        setMatchScores(data.match ?? { homeScore: null, awayScore: null });
       }
     } catch {
       // silent
@@ -228,6 +234,57 @@ export default function MatchesPage() {
       return next;
     });
   }
+
+  function handleQuickAction(index: number) {
+    if (!activeAction) return;
+    setPlayerStats((prev) => {
+      const next = [...prev];
+      const player = { ...next[index] };
+      switch (activeAction) {
+        case "appearance":
+          player.minutes = player.minutes > 0 ? player.minutes : 90;
+          break;
+        case "goal":
+          player.goals += 1;
+          break;
+        case "assist":
+          player.assists += 1;
+          break;
+        case "penaltySave":
+          player.penaltySave += 1;
+          break;
+      }
+      next[index] = player;
+      return next;
+    });
+  }
+
+  function autoCleanSheet() {
+    setPlayerStats((prev) => {
+      const homeScore = matchScores.homeScore ?? 0;
+      const awayScore = matchScores.awayScore ?? 0;
+      return prev.map((ps) => {
+        // Home team defenders/GK get clean sheet if away team scored 0
+        if (ps.isHome && awayScore === 0 && (ps.position === "GK" || ps.position === "DEF")) {
+          return { ...ps, cleanSheet: true, goalsConceded: 0 };
+        }
+        // Away team defenders/GK get clean sheet if home team scored 0
+        if (!ps.isHome && homeScore === 0 && (ps.position === "GK" || ps.position === "DEF")) {
+          return { ...ps, cleanSheet: true, goalsConceded: 0 };
+        }
+        // Otherwise, remove clean sheet and set goals conceded
+        if (ps.position === "GK" || ps.position === "DEF") {
+          const goalsConceded = ps.isHome ? awayScore : homeScore;
+          return { ...ps, cleanSheet: false, goalsConceded };
+        }
+        return ps;
+      });
+    });
+  }
+
+  // Group players by team
+  const homePlayers = playerStats.filter((ps) => ps.isHome);
+  const awayPlayers = playerStats.filter((ps) => !ps.isHome);
 
   return (
     <div className="space-y-6">
@@ -417,7 +474,7 @@ export default function MatchesPage() {
       </Modal>
 
       {/* Player Stats Modal */}
-      <Modal open={statsModal} onClose={() => setStatsModal(false)} title="Match Statistics" size="xl">
+      <Modal open={statsModal} onClose={() => { setStatsModal(false); setActiveAction(null); }} title={`${selectedMatch?.homeTeam.shortName} vs ${selectedMatch?.awayTeam.shortName} — Player Stats`} size="xl">
         {statsLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -425,142 +482,258 @@ export default function MatchesPage() {
             ))}
           </div>
         ) : playerStats.length === 0 ? (
-          <p className="text-surface-400 text-sm">No player statistics available. Add players to the match first.</p>
+          <p className="text-surface-400 text-sm">No players found for this match.</p>
         ) : (
           <div className="space-y-4">
-            <div className="overflow-x-auto max-h-[400px]">
-              <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-surface-800">
-                  <tr className="border-b border-surface-700/50">
-                    <th className="px-3 py-2 text-left text-surface-400">Player</th>
-                    <th className="px-3 py-2 text-center text-surface-400">Min</th>
-                    <th className="px-3 py-2 text-center text-surface-400">Goals</th>
-                    <th className="px-3 py-2 text-center text-surface-400">Assists</th>
-                    <th className="px-3 py-2 text-center text-surface-400">CS</th>
-                    <th className="px-3 py-2 text-center text-surface-400">Saves</th>
-                    <th className="px-3 py-2 text-center text-surface-400">YC</th>
-                    <th className="px-3 py-2 text-center text-surface-400">RC</th>
-                    <th className="px-3 py-2 text-center text-surface-400">OG</th>
-                    <th className="px-3 py-2 text-center text-surface-400">PM</th>
-                    <th className="px-3 py-2 text-center text-surface-400">PS</th>
-                    <th className="px-3 py-2 text-center text-surface-400">GC</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {playerStats.map((ps, i) => (
-                    <tr key={ps.id} className="border-b border-surface-700/30">
-                      <td className="px-3 py-2">
-                        <div>
-                          <p className="text-surface-200 font-medium">{ps.playerName}</p>
-                          <p className="text-surface-500">{ps.position}</p>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          max={120}
-                          value={ps.minutes}
-                          onChange={(e) => updateStat(i, "minutes", parseInt(e.target.value) || 0)}
-                          className="w-14 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={ps.goals}
-                          onChange={(e) => updateStat(i, "goals", parseInt(e.target.value) || 0)}
-                          className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={ps.assists}
-                          onChange={(e) => updateStat(i, "assists", parseInt(e.target.value) || 0)}
-                          className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <input
-                          type="checkbox"
-                          checked={ps.cleanSheet}
-                          onChange={(e) => updateStat(i, "cleanSheet", e.target.checked)}
-                          className="rounded border-surface-600"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={ps.saves}
-                          onChange={(e) => updateStat(i, "saves", parseInt(e.target.value) || 0)}
-                          className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={ps.yellowCards}
-                          onChange={(e) => updateStat(i, "yellowCards", parseInt(e.target.value) || 0)}
-                          className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={ps.redCards}
-                          onChange={(e) => updateStat(i, "redCards", parseInt(e.target.value) || 0)}
-                          className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={ps.ownGoals}
-                          onChange={(e) => updateStat(i, "ownGoals", parseInt(e.target.value) || 0)}
-                          className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={ps.penaltyMiss}
-                          onChange={(e) => updateStat(i, "penaltyMiss", parseInt(e.target.value) || 0)}
-                          className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={ps.penaltySave}
-                          onChange={(e) => updateStat(i, "penaltySave", parseInt(e.target.value) || 0)}
-                          className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={ps.goalsConceded}
-                          onChange={(e) => updateStat(i, "goalsConceded", parseInt(e.target.value) || 0)}
-                          className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Quick Action Buttons */}
+            <div className="flex flex-wrap gap-2">
+              <span className="text-xs text-surface-500 self-center mr-1">Quick assign:</span>
+              {[
+                { key: "appearance", label: "Appearance", icon: "⚽", color: "bg-blue-500/20 border-blue-500/40 text-blue-400" },
+                { key: "goal", label: "Goal", icon: "🥅", color: "bg-green-500/20 border-green-500/40 text-green-400" },
+                { key: "assist", label: "Assist", icon: "👟", color: "bg-yellow-500/20 border-yellow-500/40 text-yellow-400" },
+                { key: "penaltySave", label: "Penalty Saved", icon: "🧤", color: "bg-purple-500/20 border-purple-500/40 text-purple-400" },
+              ].map((action) => (
+                <button
+                  key={action.key}
+                  onClick={() => setActiveAction(activeAction === action.key ? null : action.key)}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                    activeAction === action.key
+                      ? `${action.color} ring-1 ring-white/20`
+                      : "border-surface-600 bg-surface-800 text-surface-400 hover:bg-surface-700"
+                  }`}
+                >
+                  <span>{action.icon}</span>
+                  {action.label}
+                  {activeAction === action.key && <span className="ml-1 text-[10px] opacity-70">(click players)</span>}
+                </button>
+              ))}
+              <button
+                onClick={autoCleanSheet}
+                className="flex items-center gap-1.5 rounded-lg border border-surface-600 bg-surface-800 px-3 py-1.5 text-xs font-medium text-surface-400 hover:bg-surface-700"
+              >
+                🧹 Auto Clean Sheet
+              </button>
             </div>
+
+            {activeAction && (
+              <p className="text-xs text-lime-400/80">
+                Click any player below to assign <strong>{activeAction === "appearance" ? "Appearance" : activeAction === "goal" ? "Goal" : activeAction === "assist" ? "Assist" : "Penalty Saved"}</strong>. Click the button again to cancel.
+              </p>
+            )}
+
+            {/* Home Team */}
+            <div>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-surface-400">
+                {selectedMatch?.homeTeam.name} (Home)
+              </h4>
+              <div className="overflow-x-auto max-h-[250px]">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-surface-800">
+                    <tr className="border-b border-surface-700/50">
+                      <th className="px-3 py-2 text-left text-surface-400">Player</th>
+                      <th className="px-3 py-2 text-center text-surface-400">Min</th>
+                      <th className="px-3 py-2 text-center text-surface-400">G</th>
+                      <th className="px-3 py-2 text-center text-surface-400">A</th>
+                      <th className="px-3 py-2 text-center text-surface-400">CS</th>
+                      <th className="px-3 py-2 text-center text-surface-400">PS</th>
+                      <th className="px-3 py-2 text-center text-surface-400">YC</th>
+                      <th className="px-3 py-2 text-center text-surface-400">RC</th>
+                      <th className="px-3 py-2 text-center text-surface-400">OG</th>
+                      <th className="px-3 py-2 text-center text-surface-400">PM</th>
+                      <th className="px-3 py-2 text-center text-surface-400">GC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {homePlayers.map((ps) => {
+                      const i = playerStats.findIndex((p) => p.playerId === ps.playerId);
+                      return (
+                        <tr
+                          key={ps.playerId}
+                          onClick={() => handleQuickAction(i)}
+                          className={`border-b border-surface-700/30 ${
+                            activeAction ? "cursor-pointer hover:bg-lime-500/10" : ""
+                          } ${ps.minutes > 0 ? "bg-surface-800/50" : ""}`}
+                        >
+                          <td className="px-3 py-2">
+                            <p className="text-surface-200 font-medium">{ps.playerName}</p>
+                            <p className="text-surface-500">{ps.position}</p>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} max={120} value={ps.minutes}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "minutes", parseInt(e.target.value) || 0)}
+                              className="w-14 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.goals}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "goals", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.assists}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "assists", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <input type="checkbox" checked={ps.cleanSheet}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "cleanSheet", e.target.checked)}
+                              className="rounded border-surface-600" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.penaltySave}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "penaltySave", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.yellowCards}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "yellowCards", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.redCards}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "redCards", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.ownGoals}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "ownGoals", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.penaltyMiss}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "penaltyMiss", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.goalsConceded}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "goalsConceded", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Away Team */}
+            <div>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-surface-400">
+                {selectedMatch?.awayTeam.name} (Away)
+              </h4>
+              <div className="overflow-x-auto max-h-[250px]">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-surface-800">
+                    <tr className="border-b border-surface-700/50">
+                      <th className="px-3 py-2 text-left text-surface-400">Player</th>
+                      <th className="px-3 py-2 text-center text-surface-400">Min</th>
+                      <th className="px-3 py-2 text-center text-surface-400">G</th>
+                      <th className="px-3 py-2 text-center text-surface-400">A</th>
+                      <th className="px-3 py-2 text-center text-surface-400">CS</th>
+                      <th className="px-3 py-2 text-center text-surface-400">PS</th>
+                      <th className="px-3 py-2 text-center text-surface-400">YC</th>
+                      <th className="px-3 py-2 text-center text-surface-400">RC</th>
+                      <th className="px-3 py-2 text-center text-surface-400">OG</th>
+                      <th className="px-3 py-2 text-center text-surface-400">PM</th>
+                      <th className="px-3 py-2 text-center text-surface-400">GC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {awayPlayers.map((ps) => {
+                      const i = playerStats.findIndex((p) => p.playerId === ps.playerId);
+                      return (
+                        <tr
+                          key={ps.playerId}
+                          onClick={() => handleQuickAction(i)}
+                          className={`border-b border-surface-700/30 ${
+                            activeAction ? "cursor-pointer hover:bg-lime-500/10" : ""
+                          } ${ps.minutes > 0 ? "bg-surface-800/50" : ""}`}
+                        >
+                          <td className="px-3 py-2">
+                            <p className="text-surface-200 font-medium">{ps.playerName}</p>
+                            <p className="text-surface-500">{ps.position}</p>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} max={120} value={ps.minutes}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "minutes", parseInt(e.target.value) || 0)}
+                              className="w-14 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.goals}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "goals", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.assists}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "assists", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <input type="checkbox" checked={ps.cleanSheet}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "cleanSheet", e.target.checked)}
+                              className="rounded border-surface-600" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.penaltySave}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "penaltySave", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.yellowCards}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "yellowCards", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.redCards}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "redCards", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.ownGoals}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "ownGoals", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.penaltyMiss}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "penaltyMiss", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" min={0} value={ps.goalsConceded}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateStat(i, "goalsConceded", parseInt(e.target.value) || 0)}
+                              className="w-12 bg-surface-900 border border-surface-600 rounded px-1 py-1 text-center text-surface-100" />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <ModalFooter>
-              <Button variant="ghost" onClick={() => setStatsModal(false)}>
+              <Button variant="ghost" onClick={() => { setStatsModal(false); setActiveAction(null); }}>
                 Cancel
               </Button>
               <Button onClick={saveStats} loading={saving}>
