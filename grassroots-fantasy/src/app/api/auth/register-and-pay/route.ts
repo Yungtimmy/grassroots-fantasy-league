@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     const entryFee = league.entryFee || season.registrationFee;
 
     const result = await PaymentService.initializeRegistration(
-      "pending-registration",
+      null,
       entryFee,
       season.id,
       universityId,

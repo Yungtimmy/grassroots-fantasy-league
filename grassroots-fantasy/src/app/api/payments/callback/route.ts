@@ -31,8 +31,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // If this was a pending registration (userId === "pending-registration"), create the user now
-    if (payment.userId === "pending-registration" && payment.metadata) {
+    // If this was a pending registration (userId is null), create the user now
+    if (!payment.userId && payment.metadata) {
       let meta: Record<string, string> = {};
       try {
         meta = JSON.parse(payment.metadata);

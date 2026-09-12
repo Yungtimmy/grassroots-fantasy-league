@@ -147,7 +147,7 @@ export function verifyFlutterwaveSignature(
 
 export class PaymentService {
   static async initializeRegistration(
-    userId: string,
+    userId: string | null,
     amount: number,
     seasonId: string,
     universityId: string,
@@ -169,13 +169,13 @@ export class PaymentService {
 
     await prisma.payment.create({
       data: {
-        userId,
+        userId: userId ?? undefined,
         amount,
         reference,
         status: "pending",
         seasonId,
         universityId,
-        metadata: leagueId ? JSON.stringify({ leagueId }) : undefined,
+        metadata: JSON.stringify({ leagueId, ...extraMetadata }),
       },
     });
 
@@ -203,8 +203,8 @@ export class PaymentService {
     });
 
     // Enroll user in league (supports both leagueId-based and season+university-based)
-    // Skip if pending-registration — callback handles user creation + enrollment
-    if (payment.userId !== "pending-registration") {
+    // Skip if userId is null — callback handles user creation + enrollment
+    if (payment.userId) {
       let leagueId: string | undefined;
 
       if (payment.metadata) {

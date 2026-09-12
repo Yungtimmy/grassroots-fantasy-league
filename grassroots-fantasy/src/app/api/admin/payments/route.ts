@@ -32,8 +32,8 @@ export async function GET(request: NextRequest) {
     const data = payments.map((p) => ({
       id: p.id,
       userId: p.userId,
-      userName: p.user.name,
-      userEmail: p.user.email,
+      userName: p.user?.name ?? "Pending",
+      userEmail: p.user?.email ?? "—",
       amount: p.amount,
       currency: p.currency,
       reference: p.reference,
