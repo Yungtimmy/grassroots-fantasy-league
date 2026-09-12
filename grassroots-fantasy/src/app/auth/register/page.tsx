@@ -99,7 +99,7 @@ function RegisterForm() {
     }
 
     try {
-      const registerRes = await fetch("/api/auth/register", {
+      const res = await fetch("/api/auth/register-and-pay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -112,23 +112,16 @@ function RegisterForm() {
         }),
       });
 
-      const registerData = await registerRes.json();
+      const data = await res.json();
 
-      if (!registerData.success) {
-        setError(registerData.error || "Registration failed");
+      if (!data.success) {
+        setError(data.error || "Registration failed");
         setLoading(false);
         return;
       }
 
-      const paymentRes = await fetch("/api/payments/initialize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ universityId }),
-      });
-      const paymentData = await paymentRes.json();
-
-      if (paymentData.success && paymentData.data?.authorizationUrl) {
-        window.location.href = paymentData.data.authorizationUrl;
+      if (data.data?.authorizationUrl) {
+        window.location.href = data.data.authorizationUrl;
       } else {
         router.push("/dashboard");
       }

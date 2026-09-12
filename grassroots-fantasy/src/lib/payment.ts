@@ -152,16 +152,19 @@ export class PaymentService {
     seasonId: string,
     universityId: string,
     email: string,
-    leagueId?: string
+    leagueId?: string,
+    extraMetadata?: Record<string, unknown>
   ) {
     const reference = `GFL-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
     const provider = createPaymentProvider();
+
+    const metadata = { userId, seasonId, universityId, leagueId, ...extraMetadata };
 
     const { authorization_url } = await provider.initializePayment(
       amount,
       email,
       reference,
-      { userId, seasonId, universityId, leagueId }
+      metadata
     );
 
     await prisma.payment.create({
@@ -200,41 +203,44 @@ export class PaymentService {
     });
 
     // Enroll user in league (supports both leagueId-based and season+university-based)
-    let leagueId: string | undefined;
+    // Skip if pending-registration — callback handles user creation + enrollment
+    if (payment.userId !== "pending-registration") {
+      let leagueId: string | undefined;
 
-    if (payment.metadata) {
-      try {
-        const meta = JSON.parse(payment.metadata);
-        leagueId = meta.leagueId;
-      } catch {}
-    }
+      if (payment.metadata) {
+        try {
+          const meta = JSON.parse(payment.metadata);
+          leagueId = meta.leagueId;
+        } catch {}
+      }
 
-    if (!leagueId && payment.seasonId && payment.universityId) {
-      const league = await prisma.universityLeague.findUnique({
-        where: {
-          universityId_seasonId: {
-            universityId: payment.universityId,
-            seasonId: payment.seasonId,
+      if (!leagueId && payment.seasonId && payment.universityId) {
+        const league = await prisma.universityLeague.findUnique({
+          where: {
+            universityId_seasonId: {
+              universityId: payment.universityId,
+              seasonId: payment.seasonId,
+            },
           },
-        },
-      });
-      leagueId = league?.id;
-    }
+        });
+        leagueId = league?.id;
+      }
 
-    if (leagueId) {
-      await prisma.universityLeagueMember.upsert({
-        where: {
-          userId_leagueId: {
+      if (leagueId) {
+        await prisma.universityLeagueMember.upsert({
+          where: {
+            userId_leagueId: {
+              userId: payment.userId,
+              leagueId,
+            },
+          },
+          create: {
             userId: payment.userId,
             leagueId,
           },
-        },
-        create: {
-          userId: payment.userId,
-          leagueId,
-        },
-        update: {},
-      });
+          update: {},
+        });
+      }
     }
 
     return { success: true, payment };
