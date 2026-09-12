@@ -17,6 +17,17 @@ export const metadata: Metadata = {
   title: "Grassroots Fantasy League",
   description:
     "Build your dream fantasy football team from your university. Represent your school, compete with players nationwide, and win prizes.",
+  openGraph: {
+    title: "Grassroots Fantasy League",
+    description: "Represent your university. Compete nationally.",
+    images: ["/logo.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Grassroots Fantasy League",
+    description: "Represent your university. Compete nationally.",
+    images: ["/logo.png"],
+  },
 };
 
 export default function RootLayout({
