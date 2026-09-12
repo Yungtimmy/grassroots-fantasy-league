@@ -109,6 +109,7 @@ export default function SquadPage() {
   const [gameweekLocked, setGameweekLocked] = useState(false);
   const [activeGwNumber, setActiveGwNumber] = useState<number | null>(null);
   const [playerGwPoints, setPlayerGwPoints] = useState<Map<string, number>>(new Map());
+  const [shareCopied, setShareCopied] = useState(false);
 
   const squad = useMemo(() => [...starters, ...subs], [starters, subs]);
   const usedBudget = squad.reduce((sum, s) => sum + (s.player?.price ?? 0), 0);
@@ -379,6 +380,17 @@ export default function SquadPage() {
     }
   }
 
+  function shareSquad() {
+    if (!user) return;
+    const url = `${window.location.origin}/squad/share/${user.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    }).catch(() => {
+      window.prompt("Copy this link:", url);
+    });
+  }
+
   if (teamLoading) {
     return (
       <div className="min-h-screen bg-black px-4 py-4">
@@ -472,6 +484,9 @@ export default function SquadPage() {
           </Button>
           <Button variant="primary" size="sm" loading={saving} onClick={saveSquad} disabled={gameweekLocked}>
             {gameweekLocked ? "Locked" : "Save Team"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={shareSquad}>
+            {shareCopied ? "Copied!" : "Share"}
           </Button>
         </div>
 
