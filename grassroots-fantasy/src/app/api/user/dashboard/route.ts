@@ -105,7 +105,7 @@ export async function GET() {
           include: {
             players: {
               where: { isStarting: true },
-              include: { player: true },
+              include: { player: { include: { realTeam: { select: { shortName: true } } } } },
             },
           },
         })
@@ -202,6 +202,7 @@ export async function GET() {
           name: p.player.name,
           position: p.position,
           points: p.player.totalPoints,
+          realTeam: p.player.realTeam.shortName,
         })) ?? [],
       nextGameweek: nextGameweek
         ? { number: nextGameweek.number, deadline: nextGameweek.deadline.toISOString(), startDate: nextGameweek.startDate.toISOString(), status: nextGameweek.status }

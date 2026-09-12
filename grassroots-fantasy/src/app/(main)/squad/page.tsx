@@ -676,13 +676,21 @@ function PlayerSlot({
         </div>
       )}
 
-      <div className={`flex items-center justify-center rounded-full ${compact ? "h-8 w-8" : "h-10 w-10"} ${
+      <div className={`relative flex items-center justify-center rounded-full overflow-hidden ${compact ? "h-8 w-8" : "h-10 w-10"} ${
         slot.player
           ? "bg-brand-500/20 text-brand-600 dark:text-brand-400 font-bold"
           : "bg-surface-200 dark:bg-surface-700 text-surface-400"
       }`}>
         {slot.player ? (
-          <span className={compact ? "text-xs" : "text-sm"}>{slot.player.name.charAt(0)}</span>
+          <>
+            <img
+              src={`/${slot.player.realTeam.shortName}.jpg`}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <span className={`relative z-10 ${compact ? "text-xs" : "text-sm"}`}>{slot.player.name.charAt(0)}</span>
+          </>
         ) : (
           <svg className={compact ? "h-3 w-3" : "h-4 w-4"} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

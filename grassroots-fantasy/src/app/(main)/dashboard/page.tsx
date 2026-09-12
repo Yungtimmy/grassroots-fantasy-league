@@ -19,6 +19,7 @@ interface DashboardData {
     name: string
     position: string
     points: number
+    realTeam: string
   }>
   nextGameweek: {
     number: number
@@ -300,8 +301,16 @@ export default function DashboardPage() {
                 >
                   {player ? (
                     <>
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/20 text-[10px] font-bold text-brand-400">
-                        {player.name.split(" ").pop()?.charAt(0) || pos.charAt(0)}
+                      <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/20 overflow-hidden">
+                        <img
+                          src={`/${player.realTeam}.jpg`}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-brand-400">
+                          {player.name.split(" ").pop()?.charAt(0) || pos.charAt(0)}
+                        </span>
                       </div>
                       <span className="mt-1 text-[8px] text-gray-500 text-center leading-tight truncate w-full px-1">
                         {player.name.split(" ").pop() || pos}

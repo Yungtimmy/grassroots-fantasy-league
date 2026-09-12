@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { label: "Scoring", href: "/teblad/scoring", icon: "🎯" },
   { label: "Payments", href: "/teblad/payments", icon: "💰" },
   { label: "Users", href: "/teblad/users", icon: "👥" },
+  { label: "GW Stats", href: "/teblad/gameweek-stats", icon: "📈" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

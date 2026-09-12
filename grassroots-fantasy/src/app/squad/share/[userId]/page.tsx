@@ -133,8 +133,14 @@ export default function SharedSquadPage() {
                       V
                     </div>
                   )}
-                  <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold text-white">
-                    {p.name.charAt(0)}
+                  <div className="relative h-10 w-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={`/${p.realTeam}.jpg`}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                    <span className="relative z-10 text-sm font-bold text-white">{p.name.charAt(0)}</span>
                   </div>
                   <p className="mt-1 text-[10px] font-medium text-white text-center leading-tight truncate w-full">
                     {p.name.split(" ").pop()}
@@ -152,8 +158,14 @@ export default function SharedSquadPage() {
           <div className="grid grid-cols-5 gap-2">
             {subs.map((p) => (
               <div key={p.name} className="flex flex-col items-center rounded-xl border border-white/10 bg-white/5 p-2">
-                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white">
-                  {p.name.charAt(0)}
+                <div className="relative h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+                  <img
+                    src={`/${p.realTeam}.jpg`}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <span className="relative z-10 text-xs font-bold text-white">{p.name.charAt(0)}</span>
                 </div>
                 <p className="mt-1 text-[9px] font-medium text-white text-center leading-tight truncate w-full">
                   {p.name.split(" ").pop()}
