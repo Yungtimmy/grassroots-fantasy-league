@@ -683,13 +683,13 @@ function PlayerSlot({
       }`}>
         {slot.player ? (
           <>
+            <span className={`absolute inset-0 flex items-center justify-center ${compact ? "text-xs" : "text-sm"} z-0`}>{slot.player.name.charAt(0)}</span>
             <img
               src={`/${slot.player.realTeam.shortName}.jpg`}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full object-cover z-10"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
-            <span className={`relative z-10 ${compact ? "text-xs" : "text-sm"}`}>{slot.player.name.charAt(0)}</span>
           </>
         ) : (
           <svg className={compact ? "h-3 w-3" : "h-4 w-4"} fill="none" viewBox="0 0 24 24" stroke="currentColor">
