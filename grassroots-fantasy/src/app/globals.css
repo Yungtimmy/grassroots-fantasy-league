@@ -79,3 +79,35 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+
+@layer utilities {
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(205, 242, 43, 0.04) 40%,
+      rgba(205, 242, 43, 0.08) 50%,
+      rgba(205, 242, 43, 0.04) 60%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(205, 242, 43, 0.06) 50%,
+      transparent 100%
+    );
+  }
+}
