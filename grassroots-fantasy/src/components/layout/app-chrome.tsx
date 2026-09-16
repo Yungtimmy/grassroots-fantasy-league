@@ -9,12 +9,18 @@ import { Footer } from "./footer";
 import { ParticleAssemblyLoader } from "@/components/ui/particle-assembly-loader";
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const hideChrome = pathname?.startsWith("/teblad") || pathname?.startsWith("/auth") || false;
-
+  const rawPathname = usePathname();
   const [showLoader, setShowLoader] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  const pathname = rawPathname ?? "";
+
+  const hideChrome =
+    mounted &&
+    (pathname.startsWith("/teblad") || pathname.startsWith("/auth"));
 
   useEffect(() => {
+    setMounted(true);
     const seen = sessionStorage.getItem("gfl-intro-seen");
     if (!seen) setShowLoader(true);
   }, []);
@@ -27,7 +33,9 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       {showLoader && <ParticleAssemblyLoader onComplete={handleLoaderComplete} />}
-      {hideChrome ? (
+      {!mounted ? (
+        <div className="min-h-screen bg-black" />
+      ) : hideChrome ? (
         children
       ) : (
         <>
