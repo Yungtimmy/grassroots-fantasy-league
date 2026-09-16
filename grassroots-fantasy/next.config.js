@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
+
 const nextConfig = {
   images: {
     remotePatterns: [
@@ -12,7 +14,24 @@ const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   experimental: {
-    optimizePackageImports: ['lucide-react', 'gsap'],
+    optimizePackageImports: ['lucide-react'],
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+      };
+    }
+    config.cache = {
+      type: 'filesystem',
+      cacheDirectory: path.join(__dirname, '.next', 'cache'),
+      buildDependencies: {
+        config: [__filename],
+      },
+      store: 'pack',
+      version: '1',
+    };
+    return config;
   },
   headers: async () => [
     {

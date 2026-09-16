@@ -10,7 +10,7 @@ import { ParticleAssemblyLoader } from "@/components/ui/particle-assembly-loader
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const hideChrome = pathname.startsWith("/teblad") || pathname.startsWith("/auth");
+  const hideChrome = pathname?.startsWith("/teblad") || pathname?.startsWith("/auth") || false;
 
   const [showLoader, setShowLoader] = useState(false);
 
