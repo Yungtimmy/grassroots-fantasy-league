@@ -1,3 +1,16 @@
+const fs = require("fs");
+const path = require("path");
+
+function canonicalDir(dir) {
+  try {
+    return fs.realpathSync.native(dir);
+  } catch {
+    return path.resolve(dir);
+  }
+}
+
+const appDir = canonicalDir(__dirname);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -15,7 +28,9 @@ const nextConfig = {
     optimizePackageImports: ['lucide-react'],
   },
   webpack: (config) => {
-    config.cache = { type: 'memory' };
+    config.cache = { type: "memory" };
+    // Pin a single Windows path casing so Desktop/desktop doesn't duplicate React.
+    config.context = appDir;
     return config;
   },
   headers: async () => [

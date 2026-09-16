@@ -9,18 +9,16 @@ import { Footer } from "./footer";
 import { ParticleAssemblyLoader } from "@/components/ui/particle-assembly-loader";
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
-  const rawPathname = usePathname();
+  const pathname = usePathname() ?? "";
   const [showLoader, setShowLoader] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
-  const pathname = rawPathname ?? "";
-
+  // Keep App Router children mounted on every render. Replacing {children}
+  // with a placeholder (the old !mounted gate) unmounts OuterLayoutRouter
+  // and throws: "invariant expected layout router to be mounted".
   const hideChrome =
-    mounted &&
-    (pathname.startsWith("/teblad") || pathname.startsWith("/auth"));
+    pathname.startsWith("/teblad") || pathname.startsWith("/auth");
 
   useEffect(() => {
-    setMounted(true);
     const seen = sessionStorage.getItem("gfl-intro-seen");
     if (!seen) setShowLoader(true);
   }, []);
@@ -33,18 +31,10 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       {showLoader && <ParticleAssemblyLoader onComplete={handleLoaderComplete} />}
-      {!mounted ? (
-        <div className="min-h-screen bg-black" />
-      ) : hideChrome ? (
-        children
-      ) : (
-        <>
-          <Navbar />
-          {children}
-          <MobileNav />
-          <Footer />
-        </>
-      )}
+      {!hideChrome && <Navbar />}
+      {children}
+      {!hideChrome && <MobileNav />}
+      {!hideChrome && <Footer />}
     </AuthProvider>
   );
 }
