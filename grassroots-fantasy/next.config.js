@@ -1,6 +1,4 @@
 /** @type {import('next').NextConfig} */
-const path = require('path');
-
 const nextConfig = {
   images: {
     remotePatterns: [
@@ -16,21 +14,8 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-      };
-    }
-    config.cache = {
-      type: 'filesystem',
-      cacheDirectory: path.join(__dirname, '.next', 'cache'),
-      buildDependencies: {
-        config: [__filename],
-      },
-      store: 'pack',
-      version: '1',
-    };
+  webpack: (config) => {
+    config.cache = { type: 'memory' };
     return config;
   },
   headers: async () => [
