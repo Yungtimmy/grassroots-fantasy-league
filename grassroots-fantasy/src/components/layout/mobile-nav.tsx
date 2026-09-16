@@ -90,7 +90,7 @@ export function MobileNav() {
       <nav className="flex items-center justify-around rounded-2xl border border-white/20 dark:border-white/10 bg-white/60 dark:bg-black/40 px-2 py-2 shadow-xl shadow-black/5 backdrop-blur-xl">
         {items.map((item) => {
           const isActive =
-            pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            pathname === item.href || (item.href !== "/dashboard" && (pathname ?? "").startsWith(item.href));
           return (
             <Link
               key={item.href}

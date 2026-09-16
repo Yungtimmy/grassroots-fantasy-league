@@ -141,7 +141,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
           {NAV_ITEMS.map((item) => {
             const isActive =
-              item.href === "/teblad" ? pathname === "/teblad" : pathname.startsWith(item.href);
+              item.href === "/teblad" ? pathname === "/teblad" : (pathname ?? "").startsWith(item.href);
             return (
               <Link
                 key={item.href}

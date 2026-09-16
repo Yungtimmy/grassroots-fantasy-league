@@ -70,7 +70,7 @@ export function Navbar() {
               href={link.href}
               className={cn(
                 "rounded-xl px-4 py-1.5 text-sm font-medium transition-all",
-                pathname === link.href || pathname.startsWith(`${link.href}/`)
+                pathname === link.href || (pathname ?? "").startsWith(`${link.href}/`)
                   ? "bg-brand-500 text-white shadow-md shadow-brand-500/25"
                   : "text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-white/10 hover:text-surface-900 dark:hover:text-white"
               )}
