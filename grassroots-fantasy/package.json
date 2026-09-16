@@ -17,7 +17,6 @@
     "@supabase/supabase-js": "^2.49.8",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
-    "framer-motion": "^13.2.0",
     "gsap": "^3.15.0",
     "jose": "^5.9.0",
     "next": "^14.2.0",
