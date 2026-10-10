@@ -2,7 +2,7 @@
 
 This file is the persistent brain for this repo. Read it at the start of every session. Update it at the end of every session with what changed, what is still broken, and what to do next.
 
-Last updated: 2026-10-10 (Idempotent gameweek scoring, per-user badges, recompute script)
+Last updated: 2026-10-10 (Lineup snapshots per gameweek, points keyed by team)
 
 **Git branch: `ADMIN`** (repo initialized at workspace root `cfl/`)
 
@@ -166,9 +166,12 @@ DB was force-reset and re-seeded on 2026-09-07.
 
 ## Scoring (user-specified rules)
 
-Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoints` inside one database transaction. It rebuilds that gameweek from stored stats and **sets** totals. Running it again does not add a second copy.
+Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoints` inside one database transaction. It rebuilds that gameweek from the **saved lineup** and stored stats, and **sets** totals. Running it again does not add a second copy.
 
-- Only the starting XI scores. Bench players never count.
+- Only the starting XI in that gameweek's lineup snapshot scores. Bench players never count. `FantasyTeamPlayer` is the squad managers can still edit; it is not history.
+- A snapshot (`gameweek_lineups` plus `gameweeks.lineup_frozen_at`) is taken when an admin moves that gameweek to active or finished, and on the first stat save of the live gameweek if it is not frozen yet. The live gameweek is the earliest one still `upcoming` or `active`. Once it is `finished`, the next gameweek is live and the old squad must not be rebuilt from `FantasyTeamPlayer`.
+- Gameweeks with no snapshot cannot be scored from the current squad. Stat save returns 409. `npm run points:recompute` warns and skips them. `--capture-live` copies the current squad onto the live gameweek only.
+- Points are stored on `teamId`. A manager with two teams in one season gets two totals. Old rows are attached to a team only when that manager had exactly one team in the season (see the migration). Other old rows stay unattributed.
 - Appearance: +2 for any minutes above 0. There is no separate under-60 rate.
 - Goal: GK 10, DEF 8, MID 6, FWD 5 (a scored penalty is entered as a goal, not a second event)
 - Assist 3
@@ -180,10 +183,10 @@ Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoin
 - Captain ×3 and vice-captain ×2, from `ROLE_MULTIPLIERS` in `src/lib/scoring-engine.ts`. Both apply when both play. No vice-captain fallback.
 - `ScoringRule` rows override those point values when present. Role multipliers do not read `app_config` (an old seed had captain at 2).
 - Two matches in the same gameweek are added together, then the multiplier is applied once.
-- My Team badges come from that manager's own gameweek transactions. Their sum is dashboard GW Points. Overall and both leaderboards use the team total. Admin player total is the unmultiplied base.
+- My Team badges, dashboard GW Points, Overall, and the leaderboards all use that team's transactions. Admin player total is the unmultiplied base.
 
 Tests: `npm test` in `grassroots-fantasy/`.
-Rebuild live totals (dry run, then write): `npm run points:recompute` and `npm run points:recompute -- --write`. Do not run the write against production until the dry run has been checked.
+Rebuild (dry run, then write): `npm run points:recompute`. Add `--capture-live` to snapshot the open gameweek. Add `--write` to persist. Do not run the write or the migration against production until the dry run has been checked. The migration file is `prisma/migrations/20261010103000_gameweek_lineup_snapshots/migration.sql`. It has not been applied.
 
 ---
 
@@ -337,6 +340,12 @@ Paste the Supabase **connection string** (Session pooler URI) or the **database 
 Stat saves were calling `ScoringService.calculateAllPoints`, which upserted the gameweek transaction but **incremented** `FantasyTeam.totalPoints` on every save. A second save of the same fixture added the points again. Two matches in one gameweek overwrote the single `(user, player, gameweek)` row and still incremented the team total for both. Bench players were included. My Team badges read every manager's transaction for that player and kept one of them, so a captain multiplier could show on the wrong squad.
 
 `recomputeGameweekPoints` now replaces the gameweek inside a transaction. Failures roll back and the admin stats modal shows the error. `npm run points:recompute` prints before/after and writes only with `--write`.
+
+### 2026-10-10 — Lineup snapshots and team-keyed points
+
+Rescoring a finished gameweek was reading `FantasyTeamPlayer`, which only holds the current squad. Points were also unique on `(user, player, gameweek)`, so two teams of one manager shared one score.
+
+`GameweekLineup` freezes starter, bench, captain, and vice per team at the live gameweek's lock. Scoring reads that snapshot. The recompute script skips any gameweek with `lineup_frozen_at` null. The migration does not invent historical lineups. It sets `team_id` on existing point rows only when the manager has one team in that season. Do not run the migration or `--write` against the live database from this environment.
 
 ### 2026-09-11 — Payment guard + fee fix + profile faculty/department
 

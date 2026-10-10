@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { captureLineupIfLive } from "@/lib/scoring";
 
 export async function PUT(
   request: NextRequest,
@@ -13,6 +14,14 @@ export async function PUT(
     const { id } = params;
     const body = await request.json();
 
+    const existing = await prisma.gameweek.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Gameweek not found" }, { status: 404 });
+    }
+
     const updateData: Record<string, unknown> = {};
     if (body.number) updateData.number = body.number;
     if (body.name) updateData.name = body.name;
@@ -21,9 +30,17 @@ export async function PUT(
     if (body.endDate) updateData.endDate = new Date(body.endDate);
     if (body.status) updateData.status = body.status;
 
-    const gameweek = await prisma.gameweek.update({
-      where: { id },
-      data: updateData,
+    const nextStatus = typeof body.status === "string" ? body.status : existing.status;
+    const locksLineup = (nextStatus === "active" || nextStatus === "finished") && nextStatus !== existing.status;
+
+    const gameweek = await prisma.$transaction(async (tx) => {
+      if (locksLineup) {
+        await captureLineupIfLive(id, tx);
+      }
+      return tx.gameweek.update({
+        where: { id },
+        data: updateData,
+      });
     });
 
     return NextResponse.json({ success: true, data: gameweek });

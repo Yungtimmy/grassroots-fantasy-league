@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { gameweekPointsByTeam } from "@/lib/scoring";
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,47 +27,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: { leaderboard: [] } });
     }
 
-    const txns = await prisma.fantasyPointTransaction.groupBy({
-      by: ["userId"],
-      where: { gameweekId: gameweek.id },
-      _sum: { totalPoints: true },
-      orderBy: { _sum: { totalPoints: "desc" } },
+    const teams = await prisma.fantasyTeam.findMany({
+      where: { league: { seasonId } },
+      include: {
+        user: { select: { id: true, name: true, username: true } },
+        league: {
+          include: {
+            university: { select: { shortName: true, slug: true } },
+          },
+        },
+      },
     });
 
-    const leaderboard = await Promise.all(
-      txns.map(async (tx, i) => {
-        const user = await prisma.user.findUnique({
-          where: { id: tx.userId },
-          select: { id: true, name: true, username: true },
-        });
+    const byTeam = await gameweekPointsByTeam(prisma, {
+      seasonId,
+      gameweekId: gameweek.id,
+      teams: teams.map((team) => ({ teamId: team.id, userId: team.userId })),
+    });
 
-        const team = await prisma.fantasyTeam.findFirst({
-          where: {
-            userId: tx.userId,
-            league: { seasonId },
-          },
-          include: {
-            league: {
-              include: {
-                university: { select: { shortName: true, slug: true } },
-              },
-            },
-          },
-        });
-
-        return {
-          rank: i + 1,
-          userId: tx.userId,
-          playerName: user?.name ?? "Unknown",
-          username: user?.username ?? "",
-          university: team?.league.university.shortName ?? "",
-          universitySlug: team?.league.university.slug ?? "",
-          gwPoints: tx._sum.totalPoints ?? 0,
-          totalPoints: team?.totalPoints ?? 0,
-          movement: 0,
-        };
-      })
-    );
+    const leaderboard = teams
+      .map((team) => ({
+        teamId: team.id,
+        userId: team.userId,
+        playerName: team.user.name,
+        username: team.user.username,
+        university: team.league.university.shortName,
+        universitySlug: team.league.university.slug,
+        gwPoints: byTeam[team.id] ?? 0,
+        totalPoints: team.totalPoints,
+        movement: 0,
+      }))
+      .filter((entry) => entry.gwPoints !== 0)
+      .sort((a, b) => b.gwPoints - a.gwPoints)
+      .map((entry, index) => ({ ...entry, rank: index + 1 }));
 
     return NextResponse.json({ success: true, data: { leaderboard } });
   } catch (error) {

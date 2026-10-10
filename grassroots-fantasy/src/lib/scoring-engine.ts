@@ -90,6 +90,8 @@ export type PlayerAward = {
 
 export type PointTxn = {
   userId: string;
+  /** Null when a legacy row could not be attached to one team. */
+  teamId: string | null;
   playerId: string;
   gameweekId: string;
   eventType: string;
@@ -100,7 +102,7 @@ export type PointTxn = {
 
 export type PointsLedger = {
   transactions: PointTxn[];
-  /** userId -> overall points across every gameweek still in the ledger */
+  /** teamId -> overall points across every gameweek still in the ledger */
   teamTotals: Record<string, number>;
   /** playerId -> unmultiplied base points */
   playerTotals: Record<string, number>;
@@ -240,7 +242,7 @@ export function awardsForSquad(
 
   for (const slot of slots) {
     if (!slot.isStarting || slot.basePoints === 0) continue;
-    const key = `${slot.userId}:${slot.playerId}`;
+    const key = `${slot.teamId}:${slot.playerId}`;
     const existing = chosen.get(key);
     if (!existing || roleMultiplier(slot.isCaptain, slot.isViceCaptain) > roleMultiplier(existing.isCaptain, existing.isViceCaptain)) {
       chosen.set(key, slot);
@@ -316,6 +318,7 @@ export function replaceGameweek(
     ...ledger.transactions.filter((txn) => txn.gameweekId !== gameweekId),
     ...awards.map((award) => ({
       userId: award.userId,
+      teamId: award.teamId,
       playerId: award.playerId,
       gameweekId: award.gameweekId,
       eventType: award.eventType,
@@ -325,24 +328,30 @@ export function replaceGameweek(
     })),
   ];
 
-  const userIds = new Set<string>([
-    ...Object.keys(ledger.teamTotals),
-    ...ledger.transactions.map((txn) => txn.userId),
-    ...transactions.map((txn) => txn.userId),
-  ]);
+  const next = ledgerFromTransactions(transactions, { ...ledger.playerTotals, ...playerBases });
+  for (const teamId of Object.keys(ledger.teamTotals)) {
+    if (next.teamTotals[teamId] === undefined) next.teamTotals[teamId] = 0;
+  }
+  return next;
+}
+
+export function ledgerFromTransactions(
+  transactions: PointTxn[],
+  playerTotals: Record<string, number> = {},
+): PointsLedger {
+  const teamIds = new Set<string>();
+  for (const txn of transactions) {
+    if (txn.teamId) teamIds.add(txn.teamId);
+  }
 
   const teamTotals: Record<string, number> = {};
-  for (const userId of userIds) {
-    teamTotals[userId] = transactions
-      .filter((txn) => txn.userId === userId)
+  for (const teamId of teamIds) {
+    teamTotals[teamId] = transactions
+      .filter((txn) => txn.teamId === teamId)
       .reduce((sum, txn) => sum + txn.totalPoints, 0);
   }
 
-  return {
-    transactions,
-    teamTotals,
-    playerTotals: { ...ledger.playerTotals, ...playerBases },
-  };
+  return { transactions, teamTotals, playerTotals };
 }
 
 export function badgesForUser(awards: PlayerAward[], userId: string): Record<string, number> {
@@ -352,6 +361,58 @@ export function badgesForUser(awards: PlayerAward[], userId: string): Record<str
     badges[award.playerId] = (badges[award.playerId] ?? 0) + award.totalPoints;
   }
   return badges;
+}
+
+/** Badges for one fantasy team. Two teams of the same manager do not share these. */
+export function badgesForTeam(awards: PlayerAward[], teamId: string): Record<string, number> {
+  const badges: Record<string, number> = {};
+  for (const award of awards) {
+    if (award.teamId !== teamId) continue;
+    badges[award.playerId] = (badges[award.playerId] ?? 0) + award.totalPoints;
+  }
+  return badges;
+}
+
+export type AttributionRow = {
+  teamId: string | null;
+  userId: string;
+  totalPoints: number;
+};
+
+/**
+ * Rows with a teamId stay on that team. A row with no teamId counts for a
+ * manager only when they have exactly one team. Two teams leave it unattributed.
+ */
+export function attributePoints(input: {
+  rows: AttributionRow[];
+  teams: Array<{ teamId: string; userId: string }>;
+}): { totals: Record<string, number>; unattributedPoints: number; unattributedRows: number } {
+  const teamsByUser = new Map<string, string[]>();
+  const totals: Record<string, number> = {};
+  for (const team of input.teams) {
+    totals[team.teamId] = 0;
+    const list = teamsByUser.get(team.userId) ?? [];
+    list.push(team.teamId);
+    teamsByUser.set(team.userId, list);
+  }
+
+  let unattributedPoints = 0;
+  let unattributedRows = 0;
+  for (const row of input.rows) {
+    if (row.teamId) {
+      totals[row.teamId] = (totals[row.teamId] ?? 0) + row.totalPoints;
+      continue;
+    }
+    const teams = teamsByUser.get(row.userId) ?? [];
+    if (teams.length === 1) {
+      totals[teams[0]] += row.totalPoints;
+      continue;
+    }
+    unattributedRows += 1;
+    unattributedPoints += row.totalPoints;
+  }
+
+  return { totals, unattributedPoints, unattributedRows };
 }
 
 export function sumPoints(values: Record<string, number>): number {
@@ -369,16 +430,61 @@ export function rebuildSeason(
   gameweeks: SeasonGameweekInput[],
   rules: ScoringRules = DEFAULT_SCORING_RULES,
 ): PointsLedger {
-  let ledger = emptyLedger();
+  return rebuildWithSnapshots(
+    gameweeks.map((gameweek) => ({ ...gameweek, squad: gameweek.squad })),
+    [],
+    rules,
+  ).ledger;
+}
+
+export type SnapshotGameweekInput = {
+  gameweekId: string;
+  stats: MatchStatInput[];
+  /**
+   * Lineup saved for this gameweek. Null means there is no snapshot.
+   * `currentSquad` is accepted and ignored so a caller cannot fall back to it.
+   */
+  squad: SquadSlot[] | null;
+  currentSquad?: SquadSlot[];
+};
+
+/**
+ * Score gameweeks that have a lineup snapshot. A gameweek with `squad: null`
+ * is left untouched: its preserved transactions stay, and `currentSquad` is
+ * not read.
+ */
+export function rebuildWithSnapshots(
+  gameweeks: SnapshotGameweekInput[],
+  preserved: PointTxn[] = [],
+  rules: ScoringRules = DEFAULT_SCORING_RULES,
+): { ledger: PointsLedger; skippedGameweekIds: string[] } {
+  const skippedGameweekIds = gameweeks.filter((gameweek) => gameweek.squad === null).map((gameweek) => gameweek.gameweekId);
+  let ledger = ledgerFromTransactions(preserved);
   const seasonBases: Record<string, number> = {};
 
   for (const gameweek of gameweeks) {
-    const scored = scoreGameweek({ ...gameweek, rules });
+    if (gameweek.squad === null) {
+      for (const stat of gameweek.stats) {
+        const scored = scoreMatchStat(stat, rules);
+        seasonBases[stat.playerId] = (seasonBases[stat.playerId] ?? 0) + scored.points;
+      }
+      continue;
+    }
+
+    const scored = scoreGameweek({
+      gameweekId: gameweek.gameweekId,
+      stats: gameweek.stats,
+      squad: gameweek.squad,
+      rules,
+    });
     for (const [playerId, base] of Object.entries(scored.playerBases)) {
       seasonBases[playerId] = (seasonBases[playerId] ?? 0) + base;
     }
-    ledger = replaceGameweek(ledger, gameweek.gameweekId, scored.awards, { ...seasonBases });
+    ledger = replaceGameweek(ledger, gameweek.gameweekId, scored.awards, { ...ledger.playerTotals, ...seasonBases });
   }
 
-  return ledger;
+  return {
+    ledger: { ...ledger, playerTotals: seasonBases },
+    skippedGameweekIds,
+  };
 }

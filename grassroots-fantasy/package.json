@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/scoring-engine.test.ts",
+    "test": "tsx --test src/lib/scoring-engine.test.ts src/lib/lineup-policy.test.ts",
     "points:recompute": "tsx scripts/recompute-points.ts",
     "db:push": "npx prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",

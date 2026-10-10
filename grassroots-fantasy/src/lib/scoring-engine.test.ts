@@ -3,10 +3,13 @@ import { describe, it } from "node:test";
 import {
   DEFAULT_SCORING_RULES,
   ROLE_MULTIPLIERS,
+  attributePoints,
   awardsForSquad,
+  badgesForTeam,
   badgesForUser,
   emptyLedger,
   rebuildSeason,
+  rebuildWithSnapshots,
   replaceGameweek,
   roleMultiplier,
   rulesFromRows,
@@ -392,5 +395,157 @@ describe("rebuildSeason", () => {
     assert.equal(twice.playerTotals.p, once.playerTotals.p);
     assert.equal(once.playerTotals.bench, DEFAULT_SCORING_RULES.appearance);
     assert.equal(once.transactions.some((txn) => txn.playerId === "bench"), false);
+  });
+});
+
+describe("lineup snapshots and team totals", () => {
+  it("re-scores GW1 from its own lineup after the squad changed for GW2", () => {
+    const team = "team-1";
+    const user = "manager";
+    const gw1 = [
+      slot({ userId: user, teamId: team, playerId: "A", isCaptain: true }),
+      slot({ userId: user, teamId: team, playerId: "B" }),
+    ];
+    const gw2 = [
+      slot({ userId: user, teamId: team, playerId: "A", isStarting: false }),
+      slot({ userId: user, teamId: team, playerId: "C", isCaptain: true }),
+    ];
+    const played = (playerId: string, goals = 0) =>
+      stat({ playerId, position: "MID", minutes: 90, goals });
+
+    const before = rebuildWithSnapshots([
+      { gameweekId: "gw1", squad: gw1, stats: [played("A"), played("B")] },
+      { gameweekId: "gw2", squad: gw2, stats: [played("A"), played("C")] },
+    ]);
+
+    const aBefore = before.ledger.transactions.find((txn) => txn.gameweekId === "gw1" && txn.playerId === "A");
+    const bBefore = before.ledger.transactions.find((txn) => txn.gameweekId === "gw1" && txn.playerId === "B");
+    assert.equal(aBefore?.multiplier, ROLE_MULTIPLIERS.captain);
+    assert.equal(aBefore?.totalPoints, DEFAULT_SCORING_RULES.appearance * ROLE_MULTIPLIERS.captain);
+    assert.equal(bBefore?.totalPoints, DEFAULT_SCORING_RULES.appearance);
+    assert.equal(
+      before.ledger.transactions.find((txn) => txn.gameweekId === "gw1" && txn.playerId === "C"),
+      undefined,
+    );
+
+    const after = rebuildWithSnapshots([
+      {
+        gameweekId: "gw1",
+        squad: gw1,
+        currentSquad: gw2,
+        stats: [played("A", 1), played("B")],
+      },
+      { gameweekId: "gw2", squad: gw2, stats: [played("A"), played("C")] },
+    ]);
+
+    const aAfter = after.ledger.transactions.find((txn) => txn.gameweekId === "gw1" && txn.playerId === "A");
+    const bAfter = after.ledger.transactions.find((txn) => txn.gameweekId === "gw1" && txn.playerId === "B");
+    const goal = DEFAULT_SCORING_RULES.goal.MID;
+    assert.equal(aAfter?.multiplier, ROLE_MULTIPLIERS.captain);
+    assert.equal(aAfter?.totalPoints, (DEFAULT_SCORING_RULES.appearance + goal) * ROLE_MULTIPLIERS.captain);
+    assert.equal(bAfter?.totalPoints, bBefore?.totalPoints);
+    assert.equal(
+      after.ledger.transactions.find((txn) => txn.gameweekId === "gw1" && txn.playerId === "C"),
+      undefined,
+    );
+    assert.equal(
+      after.ledger.transactions.find((txn) => txn.gameweekId === "gw2" && txn.playerId === "C")?.multiplier,
+      ROLE_MULTIPLIERS.captain,
+    );
+    assert.equal(
+      after.ledger.teamTotals[team],
+      (before.ledger.teamTotals[team] ?? 0) + goal * ROLE_MULTIPLIERS.captain,
+    );
+
+    const scoredWithLaterSquad = scoreGameweek({
+      gameweekId: "gw1",
+      squad: gw2,
+      stats: [played("A", 1), played("B")],
+    });
+    assert.equal(scoredWithLaterSquad.awards.find((award) => award.playerId === "A"), undefined);
+  });
+
+  it("gives two teams of one manager separate totals", () => {
+    const base = DEFAULT_SCORING_RULES.appearance + DEFAULT_SCORING_RULES.goal.MID * 2;
+    assert.equal(base, 14);
+    const scored = scoreGameweek({
+      gameweekId: "gw1",
+      squad: [
+        slot({ userId: "manager", teamId: "uni", playerId: "p", isCaptain: true }),
+        slot({ userId: "manager", teamId: "national", playerId: "p" }),
+      ],
+      stats: [stat({ playerId: "p", position: "MID", minutes: 90, goals: 2 })],
+    });
+
+    assert.equal(scored.awards.length, 2);
+    assert.equal(scored.awards.find((award) => award.teamId === "uni")?.totalPoints, base * ROLE_MULTIPLIERS.captain);
+    assert.equal(scored.awards.find((award) => award.teamId === "national")?.totalPoints, base);
+    const ledger = replaceGameweek(emptyLedger(), "gw1", scored.awards, scored.playerBases);
+    assert.equal(ledger.teamTotals.uni, 42);
+    assert.equal(ledger.teamTotals.national, 14);
+    assert.notEqual(ledger.teamTotals.uni, ledger.teamTotals.national);
+    assert.deepEqual(badgesForTeam(scored.awards, "uni"), { p: 42 });
+    assert.deepEqual(badgesForTeam(scored.awards, "national"), { p: 14 });
+  });
+
+  it("keeps a gameweek with no snapshot instead of scoring the current squad", () => {
+    const current = [slot({ userId: "manager", teamId: "team-1", playerId: "p", isCaptain: true })];
+    const preserved = [{
+      userId: "manager",
+      teamId: "team-1",
+      playerId: "p",
+      gameweekId: "gw1",
+      eventType: "APPEARANCE",
+      basePoints: 2,
+      multiplier: 1,
+      totalPoints: 5,
+    }];
+
+    const result = rebuildWithSnapshots([
+      {
+        gameweekId: "gw1",
+        squad: null,
+        currentSquad: current,
+        stats: [stat({ playerId: "p", position: "FWD", minutes: 90, goals: 3 })],
+      },
+    ], preserved);
+
+    assert.deepEqual(result.skippedGameweekIds, ["gw1"]);
+    assert.equal(result.ledger.transactions.length, 1);
+    assert.equal(result.ledger.transactions[0]?.totalPoints, 5);
+    assert.equal(result.ledger.teamTotals["team-1"], 5);
+    assert.equal(result.ledger.transactions.some((txn) => txn.multiplier === ROLE_MULTIPLIERS.captain), false);
+  });
+
+  it("attributes a teamless row only when the manager has one team", () => {
+    const one = attributePoints({
+      rows: [{ teamId: null, userId: "solo", totalPoints: 9 }],
+      teams: [{ teamId: "only", userId: "solo" }],
+    });
+    assert.equal(one.totals.only, 9);
+    assert.equal(one.unattributedRows, 0);
+
+    const two = attributePoints({
+      rows: [{ teamId: null, userId: "both", totalPoints: 9 }],
+      teams: [
+        { teamId: "uni", userId: "both" },
+        { teamId: "national", userId: "both" },
+      ],
+    });
+    assert.equal(two.totals.uni, 0);
+    assert.equal(two.totals.national, 0);
+    assert.equal(two.unattributedRows, 1);
+    assert.equal(two.unattributedPoints, 9);
+
+    const tagged = attributePoints({
+      rows: [{ teamId: "uni", userId: "both", totalPoints: 4 }],
+      teams: [
+        { teamId: "uni", userId: "both" },
+        { teamId: "national", userId: "both" },
+      ],
+    });
+    assert.equal(tagged.totals.uni, 4);
+    assert.equal(tagged.totals.national, 0);
+    assert.equal(tagged.unattributedRows, 0);
   });
 });

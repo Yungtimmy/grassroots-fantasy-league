@@ -63,7 +63,7 @@ export default function TeamPage() {
             }) => ({
               name: tp.player.name,
               position: tp.player.position,
-              points: tp.isStarting ? (tp.gameweekPoints ?? 0) : 0,
+              points: tp.gameweekPoints ?? 0,
               isCaptain: tp.isCaptain,
               isViceCaptain: tp.isViceCaptain,
               team: tp.player.realTeam?.shortName ?? "",

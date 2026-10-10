@@ -6,6 +6,7 @@ import { getAuthUser, removeAuthCookie } from "@/lib/auth";
 import { getCurrentSeason } from "@/lib/league";
 import { findDisplayedGameweek } from "@/lib/gameweek";
 import { LeaderboardService } from "@/lib/leaderboard";
+import { teamGameweekPointRows } from "@/lib/scoring";
 
 export async function GET() {
   try {
@@ -115,15 +116,12 @@ export async function GET() {
     let gameweekPoints = 0;
     const gwPointsByPlayer = new Map<string, number>();
     const displayedGameweek = await findDisplayedGameweek(season.id);
-    const starterIds = team?.players.map((p) => p.playerId) ?? [];
-    if (displayedGameweek && starterIds.length > 0) {
-      const rows = await prisma.fantasyPointTransaction.findMany({
-        where: {
-          userId: authUser.userId,
-          gameweekId: displayedGameweek.id,
-          playerId: { in: starterIds },
-        },
-        select: { playerId: true, totalPoints: true },
+    if (displayedGameweek && team) {
+      const rows = await teamGameweekPointRows(prisma, {
+        teamId: team.id,
+        userId: authUser.userId,
+        seasonId: season.id,
+        gameweekId: displayedGameweek.id,
       });
       for (const row of rows) {
         gwPointsByPlayer.set(row.playerId, (gwPointsByPlayer.get(row.playerId) ?? 0) + row.totalPoints);
@@ -140,10 +138,10 @@ export async function GET() {
         membership.league.universityId,
         season.id
       );
-      universityRank = uniBoard.find((e) => e.userId === authUser.userId)?.rank ?? 0;
+      universityRank = uniBoard.find((e) => e.teamId === team?.id)?.rank ?? 0;
 
       const grass = await LeaderboardService.getGrassrootsLeaderboard(season.id, 500, 0);
-      grassrootsRank = grass.find((e) => e.userId === authUser.userId)?.rank ?? 0;
+      grassrootsRank = grass.find((e) => e.teamId === team?.id)?.rank ?? 0;
 
       const myRank = grassrootsRank;
       if (myRank > 0) {
@@ -154,7 +152,7 @@ export async function GET() {
             rank: p.rank,
             name: p.username || p.name,
             points: p.totalPoints,
-            isYou: p.userId === authUser.userId,
+            isYou: p.teamId === team?.id,
           }));
       }
     }

@@ -1,15 +1,23 @@
 /**
  * Rebuild gameweek points, manager Overall, and admin player totals from
- * the stored match stats.
+ * the stored match stats and per-gameweek lineup snapshots.
+ *
+ * A gameweek with no snapshot is skipped. Current squads are not used for it.
+ * Pass --capture-live to copy the current squad onto the one live gameweek
+ * (the earliest upcoming or active gameweek) before scoring that gameweek.
+ * Finished gameweeks that were never snapshotted stay skipped.
  *
  * Dry run (default) only reads and prints before/after. Nothing is written
  * until you pass --write.
  *
  *   npm run points:recompute
+ *   npm run points:recompute -- --capture-live
  *   npm run points:recompute -- --write
+ *   npm run points:recompute -- --capture-live --write
  *
  * Do not point this at a database you have not backed up. The write path
- * runs in one transaction and replaces totals; it does not add to them.
+ * runs in one transaction and replaces totals for snapshotted gameweeks
+ * only. It does not add to them.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -48,6 +56,7 @@ function pad(value: string | number, width: number): string {
 
 async function main() {
   const write = process.argv.includes("--write");
+  const captureLive = process.argv.includes("--capture-live");
   loadEnvFile();
 
   if (!process.env.DATABASE_URL) {
@@ -56,14 +65,36 @@ async function main() {
   }
 
   const { previewSeasonRecompute, recomputeAllStoredPoints } = await import("../src/lib/scoring");
-  const report = await previewSeasonRecompute();
+  const report = await previewSeasonRecompute({ captureLive });
 
   console.log("GFL points recompute");
   console.log(
     write
-      ? "Mode: WRITE — totals will be replaced from stored stats."
+      ? "Mode: WRITE — snapshotted gameweeks will be replaced from stored stats."
       : "Mode: DRY RUN — no rows will be written. Pass --write to update the database.",
   );
+  if (captureLive) {
+    console.log(
+      report.captureLiveId
+        ? `Capture live: gameweek ${report.captureLiveId} would be snapshotted from the current squad.`
+        : "Capture live: no open gameweek is waiting for a snapshot.",
+    );
+  }
+  console.log("");
+
+  if (report.skippedGameweeks.length === 0) {
+    console.log("Skipped gameweeks: none.");
+  } else {
+    console.log("Skipped gameweeks (current squads were NOT used):");
+    for (const gameweek of report.skippedGameweeks) {
+      console.log(`  GW${gameweek.number} ${gameweek.season} (${gameweek.gameweekId}): ${gameweek.reason}`);
+    }
+  }
+  if (report.unattributedRows > 0) {
+    console.log(
+      `Warning: ${report.unattributedRows} point row${report.unattributedRows === 1 ? "" : "s"} (${report.unattributedPoints} pts) have no team and belong to a manager with more than one team. They are not added to either total.`,
+    );
+  }
   console.log("");
   console.log("Managers");
   console.log(
@@ -105,8 +136,11 @@ async function main() {
     return;
   }
 
+  if (report.skippedGameweeks.length > 0) {
+    console.log("Skipped gameweeks will not be modified.");
+  }
   console.log("Writing...");
-  await recomputeAllStoredPoints();
+  await recomputeAllStoredPoints({ captureLive });
   console.log("Write committed. Run the command again without --write to confirm the delta is 0.");
 }
 
