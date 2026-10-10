@@ -82,6 +82,15 @@ export default function MatchesPage() {
   const [matchScores, setMatchScores] = useState<{ homeScore: number | null; awayScore: number | null }>({ homeScore: null, awayScore: null });
   const [formError, setFormError] = useState("");
   const [statsError, setStatsError] = useState("");
+  const [pageError, setPageError] = useState("");
+  const [scheduleModal, setScheduleModal] = useState(false);
+  const [scheduleError, setScheduleError] = useState("");
+  const [scheduleForm, setScheduleForm] = useState({
+    gameweekId: "",
+    date: "",
+    time: "",
+    status: "upcoming",
+  });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -155,6 +164,85 @@ export default function MatchesPage() {
       setFormError("Network error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function localDateInput(iso: string): string {
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return iso.slice(0, 10);
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const day = String(parsed.getDate()).padStart(2, "0");
+    return `${parsed.getFullYear()}-${month}-${day}`;
+  }
+
+  function localTimeInput(iso: string, time: string | null): string {
+    if (time) return time.slice(0, 5);
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function openSchedule(match: Match) {
+    setSelectedMatch(match);
+    setScheduleError("");
+    setScheduleForm({
+      gameweekId: match.gameweekId,
+      date: localDateInput(match.date),
+      time: localTimeInput(match.date, match.time),
+      status: match.status || "upcoming",
+    });
+    setScheduleModal(true);
+  }
+
+  async function handleSchedule(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedMatch) return;
+    setScheduleError("");
+    if (!scheduleForm.gameweekId || !scheduleForm.date) {
+      setScheduleError("Gameweek and date are required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/matches/${selectedMatch.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gameweekId: scheduleForm.gameweekId,
+          date: scheduleForm.date,
+          time: scheduleForm.time,
+          status: scheduleForm.status,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setScheduleModal(false);
+        setPageError("");
+        fetchData();
+      } else {
+        setScheduleError(data.error || "Could not update this fixture");
+      }
+    } catch {
+      setScheduleError("Network error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteFixture(match: Match) {
+    const label = `${match.homeTeam.shortName} vs ${match.awayTeam.shortName}`;
+    if (!confirm(`Delete ${label}?`)) return;
+    setPageError("");
+    try {
+      const res = await fetch(`/api/admin/matches/${match.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!data.success) {
+        setPageError(data.error || "Could not delete this fixture");
+        return;
+      }
+      fetchData();
+    } catch {
+      setPageError("Network error");
     }
   }
 
@@ -299,6 +387,12 @@ export default function MatchesPage() {
         <Button onClick={openCreate}>Add Fixture</Button>
       </div>
 
+      {pageError && (
+        <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {pageError}
+        </p>
+      )}
+
       <Card>
         <div className="overflow-x-auto">
           {loading ? (
@@ -343,7 +437,11 @@ export default function MatchesPage() {
                     <td className="px-6 py-3">
                       <Badge
                         variant={
-                          m.status === "finished" ? "success" : m.status === "live" ? "pending" : "info"
+                          m.status === "finished"
+                            ? "success"
+                            : m.status === "live" || m.status === "postponed"
+                              ? "pending"
+                              : "info"
                         }
                         dot
                       >
@@ -355,18 +453,13 @@ export default function MatchesPage() {
                         <Button variant="ghost" size="sm" onClick={() => openResult(m)}>
                           Result
                         </Button>
+                        <Button variant="secondary" size="sm" onClick={() => openSchedule(m)}>
+                          Postpone / move
+                        </Button>
                         <Button variant="secondary" size="sm" onClick={() => openStats(m)}>
                           Stats
                         </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={async () => {
-                            if (!confirm("Delete this fixture?")) return;
-                            await fetch(`/api/admin/matches/${m.id}`, { method: "DELETE" });
-                            fetchData();
-                          }}
-                        >
+                        <Button variant="danger" size="sm" onClick={() => deleteFixture(m)}>
                           Delete
                         </Button>
                       </div>
@@ -436,6 +529,63 @@ export default function MatchesPage() {
             </Button>
             <Button type="submit" loading={saving}>
               Create Match
+            </Button>
+          </ModalFooter>
+        </form>
+      </Modal>
+
+      <Modal open={scheduleModal} onClose={() => setScheduleModal(false)} title="Postpone or move fixture" size="lg">
+        <form onSubmit={handleSchedule} className="space-y-4">
+          <p className="text-surface-300 text-sm">
+            {selectedMatch?.homeTeam.shortName} vs {selectedMatch?.awayTeam.shortName}
+          </p>
+          <Select
+            label="Status"
+            value={scheduleForm.status}
+            onChange={(v) => setScheduleForm({ ...scheduleForm, status: v })}
+            options={[
+              { label: "Upcoming", value: "upcoming" },
+              { label: "Live", value: "live" },
+              { label: "Finished", value: "finished" },
+              { label: "Postponed", value: "postponed" },
+            ]}
+          />
+          <Select
+            label="Gameweek"
+            value={scheduleForm.gameweekId}
+            onChange={(v) => setScheduleForm({ ...scheduleForm, gameweekId: v })}
+            options={gameweeks.map((g) => ({
+              label: `GW${g.number} - ${g.name}`,
+              value: g.id,
+            }))}
+            placeholder="Select gameweek"
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Date"
+              type="date"
+              value={scheduleForm.date}
+              onChange={(e) => setScheduleForm({ ...scheduleForm, date: e.target.value })}
+              required
+            />
+            <Input
+              label="Time"
+              type="time"
+              value={scheduleForm.time}
+              onChange={(e) => setScheduleForm({ ...scheduleForm, time: e.target.value })}
+            />
+          </div>
+          <p className="text-xs text-surface-500">
+            Postponed fixtures stay postponed after the kickoff. They are not marked live or finished automatically.
+            If this fixture already has stats, both the old and new gameweeks are recomputed from their lineup snapshots.
+          </p>
+          {scheduleError && <p className="text-sm text-red-400">{scheduleError}</p>}
+          <ModalFooter>
+            <Button variant="ghost" type="button" onClick={() => setScheduleModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={saving}>
+              Save fixture
             </Button>
           </ModalFooter>
         </form>

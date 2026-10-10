@@ -7,6 +7,7 @@ import {
   planSeasonRecompute,
   type SquadSaveStamp,
 } from "./lineup-policy";
+import { resolveGameweekRef } from "./recompute-cli";
 import {
   DEFAULT_SCORING_RULES,
   attributePoints,
@@ -646,11 +647,14 @@ export type RecomputeReport = {
   unattributedPoints: number;
   unattributedRows: number;
   captureLiveId: string | null;
+  /** Set when `--gameweek` limited the rebuild to one gameweek. */
+  targetedGameweek: { id: string; name: string; number: number; season: string } | null;
 };
 
 type SeasonSnapshot = {
   report: RecomputeReport;
   rules: ScoringRules;
+  onlyGameweekId?: string;
 };
 
 export type RecomputeOptions = {
@@ -659,7 +663,31 @@ export type RecomputeOptions = {
    * no snapshot yet. Historical gameweeks are still skipped.
    */
   captureLive?: boolean;
+  /**
+   * Gameweek id or exact name. Limits the dry run and the write to that
+   * gameweek. Other gameweeks keep their stored points.
+   */
+  gameweek?: string;
 };
+
+/**
+ * Squad used when previewing one gameweek. Gameweeks outside the plan keep
+ * `null` so their stored points stay. A missing snapshot stays `null` unless
+ * this gameweek is the live one being captured.
+ */
+export function squadForRecomputePreview(input: {
+  gameweekId: string;
+  recomputeIds: readonly string[];
+  lineupFrozenAt: Date | string | null;
+  snapshotSquad: SquadSlot[];
+  captureLiveId: string | null;
+  currentSquad: SquadSlot[];
+}): SquadSlot[] | null {
+  if (!input.recomputeIds.includes(input.gameweekId)) return null;
+  if (input.lineupFrozenAt != null) return input.snapshotSquad;
+  if (input.captureLiveId === input.gameweekId) return input.currentSquad;
+  return null;
+}
 
 async function loadSeasonSnapshot(options: RecomputeOptions = {}): Promise<SeasonSnapshot> {
   const rules = await loadScoringRules(prisma);
@@ -672,6 +700,7 @@ async function loadSeasonSnapshot(options: RecomputeOptions = {}): Promise<Seaso
         select: {
           id: true,
           number: true,
+          name: true,
           status: true,
           lineupFrozenAt: true,
           lineups: {
@@ -756,6 +785,23 @@ async function loadSeasonSnapshot(options: RecomputeOptions = {}): Promise<Seaso
     playerAfter.set(row.playerId, (playerAfter.get(row.playerId) ?? 0) + scored.points);
   }
 
+  let onlyGameweekId: string | undefined;
+  let targetedGameweek: RecomputeReport["targetedGameweek"] = null;
+  if (options.gameweek) {
+    const refs = seasons.flatMap((season) =>
+      season.gameweeks.map((gameweek) => ({
+        id: gameweek.id,
+        name: gameweek.name,
+        number: gameweek.number,
+        season: season.name,
+      })),
+    );
+    const resolved = resolveGameweekRef(refs, options.gameweek);
+    if (!resolved.ok) throw new ScoringError(resolved.error, 400);
+    onlyGameweekId = resolved.gameweek.id;
+    targetedGameweek = resolved.gameweek;
+  }
+
   const managers: ManagerPreview[] = [];
   const skippedGameweeks: SkippedGameweekPreview[] = [];
   let unattributedPoints = 0;
@@ -774,7 +820,10 @@ async function loadSeasonSnapshot(options: RecomputeOptions = {}): Promise<Seaso
         isViceCaptain: player.isViceCaptain,
       })),
     );
-    const plan = planSeasonRecompute(season.gameweeks, { captureLive: options.captureLive });
+    const plan = planSeasonRecompute(season.gameweeks, {
+      captureLive: options.captureLive,
+      onlyGameweekId,
+    });
     if (plan.captureLiveId) captureLiveId = plan.captureLiveId;
 
     for (const skipped of plan.skipped) {
@@ -805,13 +854,15 @@ async function loadSeasonSnapshot(options: RecomputeOptions = {}): Promise<Seaso
         const stats = gameweek.matches.flatMap((match) =>
           match.playerStats.map((row) => toStatInput(match.id, row)),
         );
-        if (gameweek.lineupFrozenAt) {
-          return { gameweekId: gameweek.id, stats, squad: squadFromLineups(gameweek.lineups) };
-        }
-        if (plan.captureLiveId === gameweek.id) {
-          return { gameweekId: gameweek.id, stats, squad: currentSquad };
-        }
-        return { gameweekId: gameweek.id, stats, squad: null, currentSquad };
+        const squad = squadForRecomputePreview({
+          gameweekId: gameweek.id,
+          recomputeIds: plan.recomputeIds,
+          lineupFrozenAt: gameweek.lineupFrozenAt,
+          snapshotSquad: squadFromLineups(gameweek.lineups),
+          captureLiveId: plan.captureLiveId,
+          currentSquad,
+        });
+        return { gameweekId: gameweek.id, stats, squad, currentSquad };
       }),
       preserved,
       rules,
@@ -870,8 +921,10 @@ async function loadSeasonSnapshot(options: RecomputeOptions = {}): Promise<Seaso
       unattributedPoints,
       unattributedRows,
       captureLiveId,
+      targetedGameweek,
     },
     rules,
+    onlyGameweekId,
   };
 }
 
@@ -897,7 +950,10 @@ export async function recomputeAllStoredPoints(options: RecomputeOptions = {}): 
       },
     });
     for (const season of seasons) {
-      const plan = planSeasonRecompute(season.gameweeks, { captureLive: options.captureLive });
+      const plan = planSeasonRecompute(season.gameweeks, {
+        captureLive: options.captureLive,
+        onlyGameweekId: snapshot.onlyGameweekId,
+      });
       if (plan.captureLiveId) {
         await captureLineupIfLive(plan.captureLiveId, tx);
       }

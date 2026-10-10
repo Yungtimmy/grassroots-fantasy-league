@@ -8,6 +8,11 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  finishWarningMessage,
+  fixturesNeedingFinishWarning,
+  type FinishWarningFixture,
+} from "@/lib/fixture-admin";
 import { cn, formatDate } from "@/lib/utils";
 
 interface Gameweek {
@@ -171,6 +176,35 @@ export default function GameweeksPage() {
   async function advanceStatus(gw: Gameweek) {
     const next = STATUS_FLOW[gw.status];
     if (!next) return;
+    if (next === "finished") {
+      let warning: string | null = null;
+      try {
+        const res = await fetch("/api/admin/matches");
+        const data = await res.json();
+        if (!res.ok || data.success === false) {
+          warning = `Could not check ${gw.name} for fixtures without stats. Finish this gameweek anyway?`;
+        } else {
+          const rows = (data.data ?? []) as Array<{
+            gameweekId?: string;
+            status?: string;
+            statCount?: number;
+            homeTeam?: { shortName?: string };
+            awayTeam?: { shortName?: string };
+          }>;
+          const fixtures: FinishWarningFixture[] = rows
+            .filter((match) => match.gameweekId === gw.id)
+            .map((match) => ({
+              status: match.status ?? "upcoming",
+              statCount: match.statCount ?? 0,
+              label: `${match.homeTeam?.shortName ?? "Home"} vs ${match.awayTeam?.shortName ?? "Away"}`,
+            }));
+          warning = finishWarningMessage(gw.name, fixturesNeedingFinishWarning(fixtures));
+        }
+      } catch {
+        warning = `Could not check ${gw.name} for fixtures without stats. Finish this gameweek anyway?`;
+      }
+      if (warning && !window.confirm(warning)) return;
+    }
     try {
       await fetch(`/api/admin/gameweeks/${gw.id}`, {
         method: "PUT",
