@@ -1,20 +1,19 @@
+import type { DisplayedGameweekCandidate } from "./gameweek";
+
 /**
  * Whether another manager's squad may be shown on a leaderboard.
  *
- * Reveal only when a gameweek is active and its deadline has passed — the
- * same moment squad edits lock. An upcoming gameweek, a finished gameweek,
- * or an active gameweek still before its deadline does not qualify.
- * The caller must decide this from gameweeks it loaded itself. A client
- * gameweek id, deadline, or "locked" flag is not an input.
+ * `gameweek` must be the shared current gameweek from selectDisplayedGameweek
+ * or findDisplayedGameweek. This does not choose a different week.
+ * Reveal only when that gameweek is active and its deadline has passed.
+ * A finished current gameweek, an upcoming week, or an active week still
+ * before its deadline does not qualify. A client gameweek id is not an input.
  */
 
 export const SQUAD_REVEAL_MESSAGE = "Squads reveal at the deadline";
 
-export type RevealGameweek = {
-  id: string;
-  number: number;
+export type RevealGameweek = DisplayedGameweekCandidate & {
   name?: string | null;
-  status: string;
   deadline: Date | string;
   lineupFrozenAt?: Date | string | null;
 };
@@ -29,13 +28,13 @@ export function deadlineHasPassed(deadline: Date | string, now: Date): boolean {
   return at < now.getTime();
 }
 
-export function decideSquadReveal(gameweeks: RevealGameweek[], now: Date): SquadRevealDecision {
-  const active = gameweeks
-    .filter((gameweek) => gameweek.status === "active")
-    .sort((a, b) => a.number - b.number);
-  const gameweek = active[0] ?? null;
-  if (!gameweek) return { reveal: false, gameweek: null };
-  if (!deadlineHasPassed(gameweek.deadline, now)) return { reveal: false, gameweek };
+export function decideSquadReveal(
+  gameweek: RevealGameweek | null,
+  now: Date,
+): SquadRevealDecision {
+  if (!gameweek || gameweek.status !== "active" || !deadlineHasPassed(gameweek.deadline, now)) {
+    return { reveal: false, gameweek };
+  }
   return { reveal: true, gameweek };
 }
 

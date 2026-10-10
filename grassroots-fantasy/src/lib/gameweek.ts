@@ -8,7 +8,7 @@ export type DisplayedGameweekCandidate = {
 
 /**
  * Gameweek shown as current for GW Points, My Team badges, squad badges,
- * and leaderboard GW columns.
+ * leaderboard GW columns, and leaderboard squad reveal.
  *
  * 1. An active gameweek. If more than one is active, the lowest number.
  * 2. Otherwise the finished gameweek with the highest number.

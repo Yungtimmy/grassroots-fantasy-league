@@ -147,9 +147,8 @@ describe("GET /api/leaderboard/squad/[userId]", () => {
     expect(prismaMock.fantasyTeam.findFirst).not.toHaveBeenCalled();
     expect(prismaMock.gameweekLineup.findMany).not.toHaveBeenCalled();
     expect(prismaMock.fantasyPointTransaction.findMany).not.toHaveBeenCalled();
-    const lookup = prismaMock.gameweek.findMany.mock.calls[0][0];
-    expect(lookup.where).toEqual({ seasonId: SEASON_ID });
-    expect(JSON.stringify(lookup)).not.toContain("gw-finished");
+    expect(prismaMock.gameweek.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.gameweek.findMany).toHaveBeenCalledWith({ where: { seasonId: SEASON_ID } });
   });
 
   it("allows another squad after the deadline and prefers the frozen lineup", async () => {
@@ -231,12 +230,14 @@ describe("GET /api/leaderboard/squad/[userId]", () => {
     expect(body.players).toBeUndefined();
     expect(prismaMock.fantasyTeam.findFirst).not.toHaveBeenCalled();
     expect(prismaMock.gameweekLineup.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.gameweek.findFirst).not.toHaveBeenCalled();
   });
 
   it("always allows a manager to see their own squad before the deadline", async () => {
     await signIn(OWNER_ID);
     prismaMock.gameweek.findMany.mockResolvedValue([
-      gameweek({ deadline: new Date(Date.now() + 86_400_000) }),
+      gameweek({ id: "gw-active", number: 2, deadline: new Date(Date.now() + 86_400_000) }),
+      gameweek({ id: "gw-next", number: 3, status: "upcoming", deadline: new Date(Date.now() + 172_800_000) }),
     ]);
 
     const res = await call(OWNER_ID, { gameweekId: "gw-finished", reveal: "1", locked: "true" });
@@ -252,6 +253,48 @@ describe("GET /api/leaderboard/squad/[userId]", () => {
     ]);
     expect(body.data.players[0].isCaptain).toBe(true);
     expect(body.data.players[1].isViceCaptain).toBe(true);
+    expect(body.data.gameweekId).toBe("gw-active");
     expect(prismaMock.gameweekLineup.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.gameweek.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.fantasyPointTransaction.findMany).toHaveBeenCalledWith({
+      where: {
+        gameweekId: "gw-active",
+        OR: [{ teamId: "team-owner" }, { teamId: null, userId: OWNER_ID }],
+      },
+      select: { playerId: true, totalPoints: true },
+    });
+  });
+
+  it("scores an owner's squad on the latest finished gameweek when none is active", async () => {
+    await signIn(OWNER_ID);
+    prismaMock.gameweek.findMany.mockResolvedValue([
+      gameweek({
+        id: "gw-old",
+        number: 1,
+        status: "finished",
+        deadline: new Date(Date.now() - 86_400_000),
+        lineupFrozenAt: new Date(),
+      }),
+      gameweek({
+        id: "gw-next",
+        number: 4,
+        status: "upcoming",
+        deadline: new Date(Date.now() + 86_400_000),
+      }),
+    ]);
+
+    const res = await call(OWNER_ID, { gameweekId: "gw-next" });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.data.own).toBe(true);
+    expect(body.data.gameweekId).toBe("gw-old");
+    expect(body.data.source).toBe("current");
+    expect(prismaMock.gameweek.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.fantasyPointTransaction.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ gameweekId: "gw-old" }),
+      }),
+    );
   });
 });

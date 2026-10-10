@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { findDisplayedGameweek } from "@/lib/gameweek";
 import { getCurrentSeason } from "@/lib/league";
 import { teamGameweekPointRows } from "@/lib/scoring";
 import {
@@ -10,7 +11,6 @@ import {
   decideSquadReveal,
   orderSquadPlayers,
   type RevealedSquadPlayer,
-  type RevealGameweek,
 } from "@/lib/squad-reveal";
 
 /**
@@ -19,18 +19,11 @@ import {
  * read so the viewer can always open their own squad, including before the
  * deadline, which is how /api/teams already works.
  *
- * The active gameweek and its deadline come from the database. Query flags
- * such as gameweekId, locked, or reveal are ignored.
+ * The current gameweek comes from findDisplayedGameweek. Query flags such
+ * as gameweekId, locked, or reveal are ignored. Another squad is returned
+ * only when that gameweek is active and past its deadline. Points use the
+ * same gameweek.
  */
-
-const gameweekSelect = {
-  id: true,
-  number: true,
-  name: true,
-  status: true,
-  deadline: true,
-  lineupFrozenAt: true,
-} as const;
 
 const playerSelect = {
   id: true,
@@ -94,21 +87,11 @@ export async function GET(
       return NextResponse.json({ success: false, error: "Season not found" }, { status: 404 });
     }
 
-    const gameweeks = await prisma.gameweek.findMany({
-      where: { seasonId: season.id },
-      select: gameweekSelect,
-    });
-    const decision = decideSquadReveal(gameweeks as RevealGameweek[], new Date());
+    const displayed = await findDisplayedGameweek(season.id);
+    const decision = decideSquadReveal(displayed, new Date());
     if (!decision.reveal && !isOwner) return hidden();
 
-    let gameweek: RevealGameweek | null = decision.gameweek;
-    if (!gameweek && isOwner) {
-      gameweek = await prisma.gameweek.findFirst({
-        where: { seasonId: season.id },
-        orderBy: { number: "desc" },
-        select: gameweekSelect,
-      });
-    }
+    const gameweek = decision.gameweek;
 
     const team = await prisma.fantasyTeam.findFirst({
       where: {
@@ -126,13 +109,13 @@ export async function GET(
       return NextResponse.json({ success: false, error: "No squad found" }, { status: 404 });
     }
 
-    const useSnapshot = Boolean(decision.reveal && decision.gameweek?.lineupFrozenAt);
+    const useSnapshot = Boolean(decision.reveal && gameweek?.lineupFrozenAt);
     let source: "snapshot" | "current" = "current";
     let slots: RevealedSquadPlayer[];
 
-    if (useSnapshot && decision.gameweek) {
+    if (useSnapshot && gameweek) {
       const lineup = await prisma.gameweekLineup.findMany({
-        where: { gameweekId: decision.gameweek.id, teamId: team.id },
+        where: { gameweekId: gameweek.id, teamId: team.id },
         include: { player: { select: playerSelect } },
       });
       source = "snapshot";
