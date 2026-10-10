@@ -58,6 +58,29 @@ interface FreezePlan {
   slots: FreezeSlot[];
 }
 
+interface RecomputeTeam {
+  teamId: string;
+  teamName: string;
+  name: string;
+  username: string;
+  before: number;
+  after: number;
+  delta: number;
+}
+
+interface RecomputePlan {
+  ok: boolean;
+  written: boolean;
+  reason: string | null;
+  gameweek: { id: string; name: string; number: number; season: string } | null;
+  teams: RecomputeTeam[];
+  totals: { before: number; after: number; delta: number; teams: number; teamsChanged: number };
+}
+
+function formatDelta(delta: number): string {
+  return delta > 0 ? `+${delta}` : String(delta);
+}
+
 export default function GameweeksPage() {
   const [gameweeks, setGameweeks] = useState<Gameweek[]>([]);
   const [seasons, setSeasons] = useState<SeasonOption[]>([]);
@@ -82,6 +105,10 @@ export default function GameweeksPage() {
   const [freezeLoading, setFreezeLoading] = useState(false);
   const [freezeError, setFreezeError] = useState("");
   const [freezePlan, setFreezePlan] = useState<FreezePlan | null>(null);
+  const [recomputeGw, setRecomputeGw] = useState<Gameweek | null>(null);
+  const [recomputeLoading, setRecomputeLoading] = useState(false);
+  const [recomputeError, setRecomputeError] = useState("");
+  const [recomputePlan, setRecomputePlan] = useState<RecomputePlan | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -265,6 +292,52 @@ export default function GameweeksPage() {
     }
   }
 
+  async function openRecompute(gw: Gameweek) {
+    setRecomputeGw(gw);
+    setRecomputePlan(null);
+    setRecomputeError("");
+    setRecomputeLoading(true);
+    try {
+      const res = await fetch(`/api/admin/gameweeks/${gw.id}/recompute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: false }),
+      });
+      const data = await res.json();
+      if (data.data) setRecomputePlan(data.data);
+      if (!res.ok || !data.success) {
+        setRecomputeError(data.error || data.data?.reason || "Could not preview this gameweek");
+      }
+    } catch {
+      setRecomputeError("Network error");
+    } finally {
+      setRecomputeLoading(false);
+    }
+  }
+
+  async function confirmRecompute() {
+    if (!recomputeGw || !recomputePlan?.ok || recomputePlan.written) return;
+    setRecomputeLoading(true);
+    setRecomputeError("");
+    try {
+      const res = await fetch(`/api/admin/gameweeks/${recomputeGw.id}/recompute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const data = await res.json();
+      if (data.data) setRecomputePlan(data.data);
+      if (!res.ok || !data.success) {
+        setRecomputeError(data.error || "Could not recompute points");
+        return;
+      }
+    } catch {
+      setRecomputeError("Network error");
+    } finally {
+      setRecomputeLoading(false);
+    }
+  }
+
   async function applyScoring(gw: Gameweek) {
     setScoring(gw.id);
     try {
@@ -338,12 +411,15 @@ export default function GameweeksPage() {
                       </Badge>
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         <Button variant="ghost" size="sm" onClick={() => openEdit(gw)}>
                           Edit
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => openFreeze(gw)}>
                           Freeze squads
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => openRecompute(gw)}>
+                          Recompute points
                         </Button>
                         {STATUS_FLOW[gw.status] && (
                           <Button variant="secondary" size="sm" onClick={() => advanceStatus(gw)}>
@@ -427,6 +503,79 @@ export default function GameweeksPage() {
             {freezePlan?.ok && !freezePlan.frozen ? (
               <Button type="button" loading={freezeLoading} onClick={confirmFreeze}>
                 Confirm freeze
+              </Button>
+            ) : null}
+          </ModalFooter>
+        </div>
+      </Modal>
+
+      <Modal
+        open={recomputeGw !== null}
+        onClose={() => { if (!recomputeLoading) setRecomputeGw(null); }}
+        title="Recompute points"
+        description="Dry run for this gameweek only. Nothing is written until you confirm. A gameweek with no lineup snapshot is refused."
+        size="xl"
+      >
+        <div className="space-y-4 text-sm">
+          {recomputeLoading && !recomputePlan ? <Skeleton height={16} width="100%" /> : null}
+          {recomputeError ? <p className="text-red-400">{recomputeError}</p> : null}
+          {recomputePlan?.gameweek ? (
+            <p className="text-surface-300">
+              GW{recomputePlan.gameweek.number} {recomputePlan.gameweek.name} · {recomputePlan.gameweek.season}
+            </p>
+          ) : null}
+          {recomputePlan?.written ? (
+            <p className="text-emerald-400">Points replaced for this gameweek.</p>
+          ) : null}
+          {recomputePlan && recomputePlan.teams.length > 0 ? (
+            <div className="max-h-64 overflow-auto rounded-lg border border-surface-700">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-surface-700 text-surface-400">
+                    <th className="px-3 py-2 text-left font-semibold">Team</th>
+                    <th className="px-3 py-2 text-right font-semibold">Before</th>
+                    <th className="px-3 py-2 text-right font-semibold">After</th>
+                    <th className="px-3 py-2 text-right font-semibold">Delta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recomputePlan.teams.map((team) => (
+                    <tr key={team.teamId} className="border-b border-surface-800">
+                      <td className="px-3 py-2 text-surface-200">
+                        {team.teamName}
+                        <span className="block text-surface-500">{team.name}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right text-surface-300">{team.before}</td>
+                      <td className="px-3 py-2 text-right text-surface-300">{team.after}</td>
+                      <td className={`px-3 py-2 text-right ${team.delta > 0 ? "text-emerald-400" : team.delta < 0 ? "text-red-400" : "text-surface-500"}`}>
+                        {formatDelta(team.delta)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td className="px-3 py-2 font-semibold text-surface-200">
+                      Total · {recomputePlan.totals.teamsChanged} changing
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold text-white">{recomputePlan.totals.before}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-white">{recomputePlan.totals.after}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-white">{formatDelta(recomputePlan.totals.delta)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : null}
+          {recomputePlan?.ok && recomputePlan.teams.length === 0 ? (
+            <p className="text-surface-400">No teams in this season. Confirm still replaces stored points for this gameweek.</p>
+          ) : null}
+          <ModalFooter>
+            <Button variant="ghost" type="button" onClick={() => setRecomputeGw(null)} disabled={recomputeLoading}>
+              Close
+            </Button>
+            {recomputePlan?.ok && !recomputePlan.written ? (
+              <Button type="button" loading={recomputeLoading} onClick={confirmRecompute}>
+                Confirm recompute
               </Button>
             ) : null}
           </ModalFooter>

@@ -2,7 +2,7 @@
 
 This file is the persistent brain for this repo. Read it at the start of every session. Update it at the end of every session with what changed, what is still broken, and what to do next.
 
-Last updated: 2026-10-10 (Leaderboard squad reveal after the gameweek deadline)
+Last updated: 2026-10-10 (Leaderboard squad reveal, bench 1x, admin recompute for one gameweek)
 
 **Git branch: `ADMIN`** (repo initialized at workspace root `cfl/`)
 
@@ -168,7 +168,7 @@ DB was force-reset and re-seeded on 2026-09-07.
 
 Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoints` inside one database transaction. It rebuilds that gameweek from the **saved lineup** and stored stats, and **sets** totals. Running it again does not add a second copy.
 
-- Only the starting XI in that gameweek's lineup snapshot scores. Bench players never count. `FantasyTeamPlayer` is the squad managers can still edit; it is not history.
+- The whole squad in that gameweek's lineup snapshot scores. Substitutes score their base points at `BENCH_MULTIPLIER` (1x) and count toward GW Points and Overall. Set it to 0 to drop the bench again. Captain is 3x and vice-captain is 2x for whoever holds those roles in the snapshot, including when both play. `FantasyTeamPlayer` is the squad managers can still edit; it is not history.
 - A snapshot (`gameweek_lineups` plus `gameweeks.lineup_frozen_at`) is taken when an admin moves that gameweek to active or finished, and on the first stat save of the live gameweek if it is not frozen yet. The live gameweek is the earliest one still `upcoming` or `active`. Once it is `finished`, the next gameweek is live and the old squad must not be rebuilt from `FantasyTeamPlayer`.
 - Gameweeks with no snapshot cannot be scored from the current squad. Stat save returns 409. `npm run points:recompute` warns and skips them. `--capture-live` copies the current squad onto the live gameweek only.
 - Points are stored on `teamId`. A manager with two teams in one season gets two totals. Old rows are attached to a team only when that manager had exactly one team in the season (see the migration). Other old rows stay unattributed.
@@ -180,13 +180,13 @@ Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoin
 - Goalkeeper saves are stored and not scored
 - Goal conceded (GK): -2, only when minutes are above 0
 - Yellow -1, Red -3, Own goal -2
-- Captain ×3 and vice-captain ×2, from `ROLE_MULTIPLIERS` in `src/lib/scoring-engine.ts`. Both apply when both play. No vice-captain fallback.
+- Captain ×3 and vice-captain ×2, from `ROLE_MULTIPLIERS` in `src/lib/scoring-engine.ts`. Both apply when both play. No vice-captain fallback. Substitutes use `BENCH_MULTIPLIER` (1), not the captain or vice rate.
 - `ScoringRule` rows override those point values when present. Role multipliers do not read `app_config` (an old seed had captain at 2).
 - Two matches in the same gameweek are added together, then the multiplier is applied once.
 - My Team badges, dashboard GW Points, Overall, and the leaderboards all use that team's transactions. Admin player total is the unmultiplied base.
 
 Tests: `npm test` in `grassroots-fantasy/`.
-Rebuild (dry run, then write): `npm run points:recompute`. Add `--capture-live` to snapshot the open gameweek. Add `--write` to persist. Read-only audit of finished gameweeks with no snapshot: `npm run points:audit`. It writes nothing and does not build snapshots. Do not run the write or the migration against production until the dry run has been checked. The migration file is `prisma/migrations/20261010103000_gameweek_lineup_snapshots/migration.sql`. It has not been applied.
+Rebuild one gameweek (dry run, then write): `npm run points:recompute -- --gameweek "<name or id>"`, then the same command with `--write`. That is the active gameweek when you pass its exact name or id. Omitting `--gameweek` rebuilds every snapshotted gameweek. A gameweek with no snapshot is skipped unless you also pass `--capture-live`, and that flag only copies the current squad onto the live gameweek. The same one-gameweek recompute is on Admin → Gameweeks → Recompute points: the dialog is a dry run, and Confirm recompute calls `recomputeAllStoredPoints` in the script's transaction. It refuses a gameweek with no lineup snapshot. Read-only audit of finished gameweeks with no snapshot: `npm run points:audit`. It writes nothing and does not build snapshots. Do not run the write against production until the dry run has been checked. The migration file is `prisma/migrations/20261010103000_gameweek_lineup_snapshots/migration.sql`.
 
 ---
 
@@ -353,7 +353,15 @@ Rescoring a finished gameweek was reading `FantasyTeamPlayer`, which only holds 
 
 ### 2026-10-10 — Leaderboard squad reveal
 
-National and university leaderboards open a manager's starting XI, bench, captain, and vice, with that gameweek's points keyed by team (`teamGameweekPointRows`). The week is `findDisplayedGameweek` (active, else the latest finished). `GET /api/leaderboard/squad/[userId]` reveals another squad only when that gameweek is `active` and its deadline has passed. Before that it returns 403 and `Squads reveal at the deadline`, with no players, and it ignores client `gameweekId` / `locked` / `reveal` flags. A frozen lineup (`lineupFrozenAt`) is what gets shown; the current squad is used only when that locked gameweek has no snapshot yet. The signed-in manager can always read their own squad. Leaderboard GETs are already public, so viewing someone else's squad does not require sign-in. Own squad editing is unchanged on `/api/teams`.
+National and university leaderboards open a manager's starting XI, bench, captain, and vice, with that gameweek's points keyed by team (`teamGameweekPointRows`). The week is `findDisplayedGameweek` (active, else the latest finished). `GET /api/leaderboard/squad/[userId]` reveals another squad only when that gameweek is `active` and its deadline has passed. Before that it returns 403 and `Squads reveal at the deadline`, with no players, and it ignores client `gameweekId` / `locked` / `reveal` flags. A frozen lineup (`lineupFrozenAt`) is what gets shown; the current squad is used only when that locked gameweek has no snapshot yet. The signed-in manager can always read their own squad. Leaderboard GETs are already public, so viewing someone else's squad does not require sign-in. Own squad editing is unchanged on `/api/teams`. Bench players are listed with the stored points for that team, which are 1x after substitutes score at `BENCH_MULTIPLIER`.
+
+### 2026-10-10 — Admin recompute for one gameweek
+
+Merged `ADMIN` (PR #6: current gameweek, postpone/move, `--gameweek`) into the bench 1x branch. Admin → Gameweeks → Recompute points previews that gameweek (before, after, delta, totals) and writes only after Confirm recompute, using `recomputeAllStoredPoints`. A gameweek with no lineup snapshot is refused. The action requires the admin session and logs `[recompute-points]`.
+
+### 2026-10-10 — Substitutes score at 1x
+
+`BENCH_MULTIPLIER` in `src/lib/scoring-engine.ts` is 1. The five substitutes score their base points at that rate and the award is stored like any other, so GW Points, Overall, leaderboards, and My Team badges include them. Captain stays 3x and vice stays 2x from the lineup snapshot. A captain or vice flag on a substitute does not raise the rate. Set `BENCH_MULTIPLIER` to 0 to drop the bench again. Do not run `points:recompute --write` against the live database from this environment.
 
 ### 2026-09-11 — Payment guard + fee fix + profile faculty/department
 

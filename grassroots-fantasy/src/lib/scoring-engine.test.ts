@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  BENCH_MULTIPLIER,
   DEFAULT_SCORING_RULES,
   ROLE_MULTIPLIERS,
   attributePoints,
@@ -15,6 +16,7 @@ import {
   rulesFromRows,
   scoreGameweek,
   scoreMatchStat,
+  slotMultiplier,
   sumPoints,
   type MatchStatInput,
   type PlayerAward,
@@ -60,15 +62,19 @@ describe("role multipliers", () => {
     assert.equal(ROLE_MULTIPLIERS.captain, 3);
     assert.equal(ROLE_MULTIPLIERS.viceCaptain, 2);
     assert.equal(ROLE_MULTIPLIERS.regular, 1);
+    assert.equal(BENCH_MULTIPLIER, 1);
     assert.equal(roleMultiplier(true, false), 3);
     assert.equal(roleMultiplier(false, true), 2);
     assert.equal(roleMultiplier(false, false), 1);
     assert.equal(roleMultiplier(true, true), 3);
+    assert.equal(slotMultiplier({ isStarting: false, isCaptain: true, isViceCaptain: false }), BENCH_MULTIPLIER);
+    assert.equal(slotMultiplier({ isStarting: false, isCaptain: false, isViceCaptain: true }), BENCH_MULTIPLIER);
+    assert.equal(slotMultiplier({ isStarting: true, isCaptain: true, isViceCaptain: false }), ROLE_MULTIPLIERS.captain);
   });
 });
 
 describe("reference case", () => {
-  it("scores Abdul's captain line at 42 and drops the bench +1, so 50 becomes 49", () => {
+  it("scores Abdul's captain line at 42 and a bench +1, totaling 50", () => {
     const awards = awardsForSquad("gw1", [
       { ...slot({ userId: "manager", playerId: "abdul", isCaptain: true }), basePoints: 14, eventType: "ABDUL" },
       { ...slot({ userId: "manager", playerId: "seven" }), basePoints: 7 },
@@ -78,12 +84,17 @@ describe("reference case", () => {
     ]);
 
     const abdul = awards.find((award) => award.playerId === "abdul");
+    const bench = awards.find((award) => award.playerId === "bench");
     assert.ok(abdul);
+    assert.ok(bench);
     assert.equal(abdul.basePoints, 14);
     assert.equal(abdul.multiplier, 3);
     assert.equal(abdul.totalPoints, 42);
-    assert.equal(awards.some((award) => award.playerId === "bench"), false);
-    assert.equal(totalFor(awards, "manager"), 49);
+    assert.equal(bench.multiplier, BENCH_MULTIPLIER);
+    assert.equal(bench.totalPoints, 1);
+    assert.equal(totalFor(awards, "manager"), 50);
+    assert.equal(badgesForUser(awards, "manager").bench, 1);
+    assert.equal(sumPoints(badgesForUser(awards, "manager")), 50);
   });
 });
 
@@ -225,7 +236,7 @@ describe("two matches in one gameweek", () => {
 });
 
 describe("bench", () => {
-  it("never counts a substitute toward the total", () => {
+  it("counts a substitute at 1x, including a captain flag stored on the bench", () => {
     const scored = scoreGameweek({
       gameweekId: "gw",
       stats: [
@@ -238,8 +249,14 @@ describe("bench", () => {
       ],
     });
 
-    assert.equal(scored.awards.some((award) => award.playerId === "bench"), false);
-    assert.equal(totalFor(scored.awards, "manager"), scored.playerBases.starter);
+    const bench = scored.awards.find((award) => award.playerId === "bench");
+    assert.ok(bench);
+    assert.equal(bench.multiplier, BENCH_MULTIPLIER);
+    assert.equal(bench.totalPoints, scored.playerBases.bench * BENCH_MULTIPLIER);
+    assert.notEqual(bench.multiplier, ROLE_MULTIPLIERS.captain);
+    assert.equal(totalFor(scored.awards, "manager"), scored.playerBases.starter + bench.totalPoints);
+    assert.equal(badgesForUser(scored.awards, "manager").bench, bench.totalPoints);
+    assert.equal(badgesForTeam(scored.awards, "manager").bench, bench.totalPoints);
     assert.ok(scored.playerBases.bench > 0);
   });
 });
@@ -393,8 +410,14 @@ describe("rebuildSeason", () => {
     const twice = rebuildSeason(gameweeks);
     assert.equal(twice.teamTotals.manager, once.teamTotals.manager);
     assert.equal(twice.playerTotals.p, once.playerTotals.p);
+    const benchTxn = once.transactions.find((txn) => txn.playerId === "bench");
+    const starterPoints = once.transactions
+      .filter((txn) => txn.playerId === "p")
+      .reduce((sum, txn) => sum + txn.totalPoints, 0);
     assert.equal(once.playerTotals.bench, DEFAULT_SCORING_RULES.appearance);
-    assert.equal(once.transactions.some((txn) => txn.playerId === "bench"), false);
+    assert.equal(benchTxn?.multiplier, BENCH_MULTIPLIER);
+    assert.equal(benchTxn?.totalPoints, DEFAULT_SCORING_RULES.appearance * BENCH_MULTIPLIER);
+    assert.equal(once.teamTotals.manager, starterPoints + (benchTxn?.totalPoints ?? 0));
   });
 });
 
@@ -462,7 +485,10 @@ describe("lineup snapshots and team totals", () => {
       squad: gw2,
       stats: [played("A", 1), played("B")],
     });
-    assert.equal(scoredWithLaterSquad.awards.find((award) => award.playerId === "A"), undefined);
+    const aOnBench = scoredWithLaterSquad.awards.find((award) => award.playerId === "A");
+    assert.equal(aOnBench?.multiplier, BENCH_MULTIPLIER);
+    assert.equal(aOnBench?.totalPoints, (DEFAULT_SCORING_RULES.appearance + goal) * BENCH_MULTIPLIER);
+    assert.equal(scoredWithLaterSquad.awards.find((award) => award.playerId === "B"), undefined);
   });
 
   it("gives two teams of one manager separate totals", () => {

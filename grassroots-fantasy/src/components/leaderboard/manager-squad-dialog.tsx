@@ -138,7 +138,7 @@ function PlayerGroup({ title, players }: { title: string; players: RevealedSquad
                 {player.isViceCaptain && <span className="ml-2 text-xs font-bold text-gray-300">V</span>}
               </span>
               <span className="text-xs text-gray-500">{player.club}</span>
-              <span className="w-8 text-right font-mono text-sm text-white">{player.points}</span>
+              <span className="min-w-8 shrink-0 text-right font-mono text-sm tabular-nums text-white">{player.points}</span>
             </li>
           ))}
         </ul>

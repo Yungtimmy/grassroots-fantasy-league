@@ -205,6 +205,33 @@ describe("GET /api/leaderboard/squad/[userId]", () => {
     expect(prismaMock.gameweekLineup.findMany).not.toHaveBeenCalled();
   });
 
+  it("shows a substitute's stored 1x points on the bench", async () => {
+    prismaMock.gameweek.findMany.mockResolvedValue([
+      gameweek({
+        deadline: new Date(Date.now() - 60_000),
+        lineupFrozenAt: new Date(Date.now() - 30_000),
+      }),
+    ]);
+    prismaMock.gameweekLineup.findMany.mockResolvedValue([lockedPlayer, liveBench]);
+    prismaMock.fantasyPointTransaction.findMany.mockResolvedValue([
+      { playerId: "p-locked", totalPoints: 12 },
+      { playerId: "p-bench", totalPoints: 8 },
+    ]);
+
+    const res = await call(OTHER_ID);
+    const body = await res.json();
+    const starter = body.data.players.find((player: { playerId: string }) => player.playerId === "p-locked");
+    const bench = body.data.players.find((player: { playerId: string }) => player.playerId === "p-bench");
+
+    expect(res.status).toBe(200);
+    expect(starter).toMatchObject({ isStarting: true, points: 12 });
+    expect(bench).toMatchObject({
+      isStarting: false,
+      isViceCaptain: true,
+      points: 8,
+    });
+  });
+
   it("refuses when no gameweek is active, even if the client names one", async () => {
     await signIn(OWNER_ID);
     prismaMock.gameweek.findMany.mockResolvedValue([
