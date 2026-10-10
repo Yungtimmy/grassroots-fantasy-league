@@ -2,9 +2,11 @@
 
 This file is the persistent brain for this repo. Read it at the start of every session. Update it at the end of every session with what changed, what is still broken, and what to do next.
 
-Last updated: 2026-09-11 (Payment guard, N520 fee, faculty/department profile)
+Last updated: 2026-10-10 (test-database setup for preview checks)
 
 **Git branch: `ADMIN`** (repo initialized at workspace root `cfl/`)
+
+Preview checks: `grassroots-fantasy/TESTING.md`. `npm run testdb:setup` applies `schema.prisma` and seeds a season, two gameweeks, clubs, squads, and three managers. It refuses to run unless `DATABASE_URL` and `DIRECT_URL` (when set) point at Supabase project `rctbzvpieotfmoagqbbk`.
 
 ---
 
@@ -338,3 +340,14 @@ Paste the Supabase **connection string** (Session pooler URI) or the **database 
 - Tests (no test framework yet).
 - Deadline lock, max-3-per-club, vice-captain fallback.
 - Fix Google OAuth `bad_oauth_state` (update Supabase dashboard → Authentication → URL Configuration with Vercel domain).
+
+### 2026-10-10 — Preview test database
+
+**Done**
+
+- `npm run testdb:setup` pushes `schema.prisma` and seeds a season, two gameweeks, clubs, valid 16-man squads, and three managers. It exits before any write unless `DATABASE_URL` and `DIRECT_URL` (if set) are Supabase project `rctbzvpieotfmoagqbbk`.
+- Manual preview checklists are in `grassroots-fantasy/TESTING.md`.
+
+**Not run**
+
+- The setup script was not executed against a database. Refuse-path checks only.
