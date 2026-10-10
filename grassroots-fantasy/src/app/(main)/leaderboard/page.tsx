@@ -3,13 +3,38 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/components/layout/auth-provider"
 import { Select } from "@/components/ui/select"
+import { ManagerSquadDialog, type SquadManager } from "@/components/leaderboard/manager-squad-dialog"
 
 interface LeaderboardEntry {
   rank: number
+  userId: string
+  teamId: string
   playerName: string
   university: string
   points: number
   movement: number
+}
+
+interface RawEntry {
+  rank: number
+  userId: string
+  teamId: string
+  name: string
+  university: string
+  totalPoints: number
+  movement: number
+}
+
+function mapEntries(items: RawEntry[]): LeaderboardEntry[] {
+  return items.map((entry) => ({
+    rank: entry.rank,
+    userId: entry.userId,
+    teamId: entry.teamId,
+    playerName: entry.name,
+    university: entry.university,
+    points: entry.totalPoints,
+    movement: entry.movement ?? 0,
+  }))
 }
 
 interface Season {
@@ -21,27 +46,50 @@ export default function LeaderboardPage() {
   const { user } = useAuth()
   const [seasons, setSeasons] = useState<Season[]>([])
   const [selectedSeason, setSelectedSeason] = useState("")
+  const [board, setBoard] = useState<"national" | "university">("national")
+  const [universities, setUniversities] = useState<Array<{ universityId: string; shortName: string; name: string }>>([])
+  const [universityId, setUniversityId] = useState("")
+  const [viewerUniversityId, setViewerUniversityId] = useState("")
   const [data, setData] = useState<LeaderboardEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const [selectedManager, setSelectedManager] = useState<SquadManager | null>(null)
   const perPage = 25
 
-  const fetchData = useCallback(async (seasonId: string) => {
-    const res = await fetch(`/api/leaderboard/grassroots?seasonId=${seasonId}&limit=5000&offset=0`)
-    if (res.ok) {
+  const fetchData = useCallback(async () => {
+    if (!selectedSeason) return
+    if (board === "university") {
+      if (!universityId) return
+      // Route param is the university id (the handler filters league.universityId).
+      const res = await fetch(`/api/leaderboard/university/${universityId}?seasonId=${selectedSeason}`)
+      if (!res.ok) {
+        setData([])
+        return
+      }
       const json = await res.json()
-      const items = json.data?.items ?? []
-      setData(
-        items.map((e: { rank: number; name: string; university: string; totalPoints: number; movement: number }) => ({
-          rank: e.rank,
-          playerName: e.name,
-          university: e.university,
-          points: e.totalPoints,
-          movement: e.movement ?? 0,
-        }))
-      )
+      setData(mapEntries(Array.isArray(json.data) ? json.data : []))
+      return
     }
-  }, [])
+
+    const res = await fetch(`/api/leaderboard/grassroots?seasonId=${selectedSeason}&limit=5000&offset=0`)
+    if (!res.ok) {
+      setData([])
+      return
+    }
+    const json = await res.json()
+    const items = json.data?.items
+    setData(mapEntries(Array.isArray(items) ? items : []))
+  }, [board, selectedSeason, universityId])
+
+  function openManager(entry: LeaderboardEntry | undefined) {
+    if (!entry?.userId) return
+    setSelectedManager({
+      userId: entry.userId,
+      teamId: entry.teamId,
+      name: entry.playerName,
+      university: entry.university,
+    })
+  }
 
   useEffect(() => {
     fetch("/api/seasons")
@@ -56,10 +104,76 @@ export default function LeaderboardPage() {
   }, [])
 
   useEffect(() => {
+    if (!user) {
+      setViewerUniversityId("")
+      return
+    }
+    let cancelled = false
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (cancelled) return
+        setViewerUniversityId(json?.data?.leagueMembership?.league?.university?.id ?? "")
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (board !== "university" || !selectedSeason) return
+    let cancelled = false
+    fetch(`/api/leaderboard/university-rankings?seasonId=${selectedSeason}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (cancelled) return
+        setUniversities(json?.data ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setUniversities([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [board, selectedSeason])
+
+  useEffect(() => {
+    if (board !== "university") return
+    if (universities.length === 0) {
+      setUniversityId("")
+      return
+    }
+    setUniversityId((current) => {
+      if (current && universities.some((uni) => uni.universityId === current)) return current
+      if (viewerUniversityId && universities.some((uni) => uni.universityId === viewerUniversityId)) {
+        return viewerUniversityId
+      }
+      return universities[0].universityId
+    })
+  }, [board, universities, viewerUniversityId])
+
+  useEffect(() => {
+    setPage(1)
+    setSelectedManager(null)
+  }, [selectedSeason, board, universityId])
+
+  useEffect(() => {
     if (!selectedSeason) return
+    if (board === "university" && !universityId) {
+      setData([])
+      setLoading(false)
+      return
+    }
+    let cancelled = false
     setLoading(true)
-    fetchData(selectedSeason).finally(() => setLoading(false))
-  }, [selectedSeason, fetchData])
+    fetchData().finally(() => {
+      if (!cancelled) setLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedSeason, board, universityId, fetchData])
 
   const top3 = data.slice(0, 3)
   const rest = data.slice(3)
@@ -69,14 +183,46 @@ export default function LeaderboardPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="font-display text-3xl font-bold text-white">Leaderboard</h1>
-        <Select
-          options={seasons.map((s) => ({ label: s.name, value: s.id }))}
-          value={selectedSeason}
-          onChange={setSelectedSeason}
-          placeholder="Select season"
-          className="w-48"
-        />
+        <div>
+          <h1 className="font-display text-3xl font-bold text-white">Leaderboard</h1>
+          <div className="mt-3 flex gap-2" role="tablist" aria-label="Leaderboard">
+            {([
+              ["national", "National"],
+              ["university", "University"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={board === value}
+                onClick={() => setBoard(value)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  board === value ? "bg-brand-500 text-white" : "bg-white/5 text-gray-300 hover:bg-white/10"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <Select
+            options={seasons.map((s) => ({ label: s.name, value: s.id }))}
+            value={selectedSeason}
+            onChange={setSelectedSeason}
+            placeholder="Select season"
+            className="w-48"
+          />
+          {board === "university" && universities.length > 0 && (
+            <Select
+              options={universities.map((uni) => ({ label: uni.shortName || uni.name, value: uni.universityId }))}
+              value={universityId}
+              onChange={setUniversityId}
+              placeholder="Select university"
+              className="w-48"
+            />
+          )}
+        </div>
       </div>
 
       {/* Podium */}
@@ -102,45 +248,78 @@ export default function LeaderboardPage() {
         <div className="mb-10 flex items-end justify-center gap-2 sm:gap-3">
           {/* 2nd — Silver (left) */}
           {top3[1] && (
-            <div className="flex flex-col items-center w-28 sm:w-32">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => openManager(top3[1])}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
+                  openManager(top3[1])
+                }
+              }}
+              className="flex cursor-pointer flex-col items-center w-28 sm:w-32"
+            >
               <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-gray-200 to-gray-400 text-2xl font-black text-gray-800 shadow-lg shadow-gray-500/20">
                 2
               </div>
-              <p className="text-xs sm:text-sm font-semibold text-white text-center truncate w-full">{top3[1].playerName}</p>
-              <p className="text-[10px] sm:text-xs text-gray-500 text-center">{top3[1].university}</p>
-              <p className="mt-1 font-display text-lg sm:text-xl font-bold text-gray-300">{top3[1].points}</p>
-              <div className="mt-2 w-full rounded-t-xl bg-gradient-to-t from-gray-500/30 to-gray-400/10 border border-gray-500/20 border-b-0 px-3 py-3 text-center" style={{ height: 80 }}>
-                <p className="text-[10px] uppercase tracking-wider text-gray-400">2nd</p>
-              </div>
+              <span className="block text-xs sm:text-sm font-semibold text-white text-center truncate w-full">{top3[1].playerName}</span>
+              <span className="block text-[10px] sm:text-xs text-gray-500 text-center">{top3[1].university}</span>
+              <span className="mt-1 block font-display text-lg sm:text-xl font-bold text-gray-300">{top3[1].points}</span>
+              <span className="mt-2 block w-full rounded-t-xl bg-gradient-to-t from-gray-500/30 to-gray-400/10 border border-gray-500/20 border-b-0 px-3 py-3 text-center" style={{ height: 80 }}>
+                <span className="text-[10px] uppercase tracking-wider text-gray-400">2nd</span>
+              </span>
             </div>
           )}
           {/* 1st — Gold (center, tallest) */}
           {top3[0] && (
-            <div className="flex flex-col items-center w-32 sm:w-36">
-              <div className="mb-1 text-2xl">👑</div>
-              <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 text-3xl font-black text-yellow-900 shadow-lg shadow-yellow-500/30">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => openManager(top3[0])}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
+                  openManager(top3[0])
+                }
+              }}
+              className="flex cursor-pointer flex-col items-center w-32 sm:w-36"
+            >
+              <span className="mb-1 block text-2xl">👑</span>
+              <span className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 text-3xl font-black text-yellow-900 shadow-lg shadow-yellow-500/30">
                 1
-              </div>
-              <p className="text-sm sm:text-base font-bold text-white text-center truncate w-full">{top3[0].playerName}</p>
-              <p className="text-xs text-gray-500 text-center">{top3[0].university}</p>
-              <p className="mt-1 font-display text-2xl sm:text-3xl font-black text-yellow-400">{top3[0].points}</p>
-              <div className="mt-2 w-full rounded-t-xl bg-gradient-to-t from-yellow-500/30 to-yellow-400/10 border border-yellow-500/20 border-b-0 px-3 py-3 text-center" style={{ height: 120 }}>
-                <p className="text-[10px] uppercase tracking-wider text-yellow-400">Champion</p>
-              </div>
+              </span>
+              <span className="block text-sm sm:text-base font-bold text-white text-center truncate w-full">{top3[0].playerName}</span>
+              <span className="block text-xs text-gray-500 text-center">{top3[0].university}</span>
+              <span className="mt-1 block font-display text-2xl sm:text-3xl font-black text-yellow-400">{top3[0].points}</span>
+              <span className="mt-2 block w-full rounded-t-xl bg-gradient-to-t from-yellow-500/30 to-yellow-400/10 border border-yellow-500/20 border-b-0 px-3 py-3 text-center" style={{ height: 120 }}>
+                <span className="text-[10px] uppercase tracking-wider text-yellow-400">Champion</span>
+              </span>
             </div>
           )}
           {/* 3rd — Bronze (right) */}
           {top3[2] && (
-            <div className="flex flex-col items-center w-28 sm:w-32">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => openManager(top3[2])}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
+                  openManager(top3[2])
+                }
+              }}
+              className="flex cursor-pointer flex-col items-center w-28 sm:w-32"
+            >
               <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-600 to-amber-800 text-2xl font-black text-amber-100 shadow-lg shadow-amber-600/20">
                 3
               </div>
-              <p className="text-xs sm:text-sm font-semibold text-white text-center truncate w-full">{top3[2].playerName}</p>
-              <p className="text-[10px] sm:text-xs text-gray-500 text-center">{top3[2].university}</p>
-              <p className="mt-1 font-display text-lg sm:text-xl font-bold text-amber-600">{top3[2].points}</p>
-              <div className="mt-2 w-full rounded-t-xl bg-gradient-to-t from-amber-600/30 to-amber-500/10 border border-amber-600/20 border-b-0 px-3 py-3 text-center" style={{ height: 60 }}>
-                <p className="text-[10px] uppercase tracking-wider text-amber-600">3rd</p>
-              </div>
+              <span className="block text-xs sm:text-sm font-semibold text-white text-center truncate w-full">{top3[2].playerName}</span>
+              <span className="block text-[10px] sm:text-xs text-gray-500 text-center">{top3[2].university}</span>
+              <span className="mt-1 block font-display text-lg sm:text-xl font-bold text-amber-600">{top3[2].points}</span>
+              <span className="mt-2 block w-full rounded-t-xl bg-gradient-to-t from-amber-600/30 to-amber-500/10 border border-amber-600/20 border-b-0 px-3 py-3 text-center" style={{ height: 60 }}>
+                <span className="text-[10px] uppercase tracking-wider text-amber-600">3rd</span>
+              </span>
             </div>
           )}
         </div>
@@ -175,11 +354,20 @@ export default function LeaderboardPage() {
               </tr>
             ) : (
               paginatedRest.map((entry) => {
-                const isYou = user && entry.playerName === user.name
+                const isYou = user && entry.userId === user.id
                 return (
                   <tr
-                    key={entry.rank}
-                    className={`border-b border-white/5 transition-colors hover:bg-white/5 ${
+                    key={`${entry.userId}-${entry.rank}`}
+                    onClick={() => openManager(entry)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault()
+                        openManager(entry)
+                      }
+                    }}
+                    tabIndex={0}
+                    aria-label={`View ${entry.playerName}'s squad`}
+                    className={`cursor-pointer border-b border-white/5 transition-colors hover:bg-white/5 ${
                       isYou ? "bg-brand-500/10" : ""
                     }`}
                   >
@@ -246,9 +434,15 @@ export default function LeaderboardPage() {
 
       {!loading && data.length > 0 && (
         <p className="mt-4 text-center text-xs text-gray-600">
-          {data.length} player{data.length !== 1 ? "s" : ""} registered
+          {data.length} player{data.length !== 1 ? "s" : ""} registered. Select a manager to view their squad.
         </p>
       )}
+
+      <ManagerSquadDialog
+        manager={selectedManager}
+        seasonId={selectedSeason}
+        onClose={() => setSelectedManager(null)}
+      />
     </div>
   )
 }
