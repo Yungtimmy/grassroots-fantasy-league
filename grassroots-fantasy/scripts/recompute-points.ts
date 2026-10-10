@@ -10,14 +10,21 @@
  * Dry run (default) only reads and prints before/after. Nothing is written
  * until you pass --write.
  *
+ * Pass --gameweek with a gameweek name or id to rebuild that gameweek only.
+ * The name must match exactly. If two gameweeks share a name, pass the id.
+ * Other gameweeks keep their stored points. --capture-live still applies
+ * only when the chosen gameweek is the live one and has no snapshot yet.
+ *
  *   npm run points:recompute
+ *   npm run points:recompute -- --gameweek "Week 2"
+ *   npm run points:recompute -- --gameweek <id> --write
  *   npm run points:recompute -- --capture-live
  *   npm run points:recompute -- --write
  *   npm run points:recompute -- --capture-live --write
  *
  * Do not point this at a database you have not backed up. The write path
- * runs in one transaction and replaces totals for snapshotted gameweeks
- * only. It does not add to them.
+ * runs in one transaction and replaces totals for the snapshotted gameweeks
+ * in this run only. It does not add to them.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -55,8 +62,13 @@ function pad(value: string | number, width: number): string {
 }
 
 async function main() {
-  const write = process.argv.includes("--write");
-  const captureLive = process.argv.includes("--capture-live");
+  const { parseRecomputeArgs } = await import("../src/lib/recompute-cli");
+  const parsed = parseRecomputeArgs(process.argv);
+  if (!parsed.ok) {
+    console.error(parsed.error);
+    process.exit(1);
+  }
+  const { write, captureLive } = parsed;
   loadEnvFile();
 
   if (!process.env.DATABASE_URL) {
@@ -65,14 +77,25 @@ async function main() {
   }
 
   const { previewSeasonRecompute, recomputeAllStoredPoints } = await import("../src/lib/scoring");
-  const report = await previewSeasonRecompute({ captureLive });
+  const report = await previewSeasonRecompute({
+    captureLive,
+    gameweek: parsed.gameweek,
+  });
 
   console.log("GFL points recompute");
   console.log(
     write
-      ? "Mode: WRITE — snapshotted gameweeks will be replaced from stored stats."
+      ? report.targetedGameweek
+        ? "Mode: WRITE — the selected gameweek will be replaced from stored stats."
+        : "Mode: WRITE — snapshotted gameweeks will be replaced from stored stats."
       : "Mode: DRY RUN — no rows will be written. Pass --write to update the database.",
   );
+  if (report.targetedGameweek) {
+    const target = report.targetedGameweek;
+    console.log(
+      `Gameweek: GW${target.number} ${target.name} (${target.season}, ${target.id}). Other gameweeks are left unchanged.`,
+    );
+  }
   if (captureLive) {
     console.log(
       report.captureLiveId
@@ -140,7 +163,7 @@ async function main() {
     console.log("Skipped gameweeks will not be modified.");
   }
   console.log("Writing...");
-  await recomputeAllStoredPoints({ captureLive });
+  await recomputeAllStoredPoints({ captureLive, gameweek: parsed.gameweek });
   console.log("Write committed. Run the command again without --write to confirm the delta is 0.");
 }
 

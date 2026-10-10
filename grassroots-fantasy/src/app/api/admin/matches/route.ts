@@ -15,12 +15,14 @@ export async function GET() {
         homeTeam: { select: { id: true, name: true, shortName: true, logo: true } },
         awayTeam: { select: { id: true, name: true, shortName: true, logo: true } },
         gameweek: { select: { number: true, name: true } },
+        _count: { select: { playerStats: true } },
       },
     });
 
     const data = matches.map((m) => ({
       ...m,
       gameweekNumber: m.gameweek.number,
+      statCount: m._count.playerStats,
     }));
 
     return NextResponse.json({ success: true, data });

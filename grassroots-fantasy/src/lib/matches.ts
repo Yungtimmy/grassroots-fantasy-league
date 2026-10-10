@@ -1,11 +1,12 @@
 import { prisma } from "./db";
-
-const MATCH_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours (90 min + half-time + stoppage)
+import { MATCH_DURATION_MS } from "./fixture-admin";
 
 export async function autoUpdateMatchStatuses() {
   const now = new Date();
 
-  // upcoming → live: match date+time has been reached
+  // upcoming → live: match date+time has been reached.
+  // status "postponed" is neither upcoming nor live, so a postponed fixture
+  // stays postponed after its original kickoff.
   const toLive = await prisma.match.updateMany({
     where: {
       status: "upcoming",

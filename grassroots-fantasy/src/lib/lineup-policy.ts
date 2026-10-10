@@ -54,10 +54,12 @@ const SKIPPED_LIVE =
  * Decision used by scripts/recompute-points.ts. A gameweek without a snapshot
  * is never scored from the current squad. Pass captureLive to include the
  * one live gameweek; every other missing snapshot is still skipped.
+ * Pass onlyGameweekId to rebuild that gameweek and leave every other one
+ * out of both the recompute list and the skipped list.
  */
 export function planSeasonRecompute(
   gameweeks: GameweekLockState[],
-  options: { captureLive?: boolean } = {},
+  options: { captureLive?: boolean; onlyGameweekId?: string } = {},
 ): RecomputePlan {
   const liveId = liveLineupGameweekId(gameweeks);
   const recomputeIds: string[] = [];
@@ -65,6 +67,7 @@ export function planSeasonRecompute(
   let captureLiveId: string | null = null;
 
   for (const gameweek of [...gameweeks].sort((a, b) => a.number - b.number)) {
+    if (options.onlyGameweekId && gameweek.id !== options.onlyGameweekId) continue;
     const isLive = gameweek.id === liveId;
     if (gameweek.lineupFrozenAt != null) {
       recomputeIds.push(gameweek.id);
