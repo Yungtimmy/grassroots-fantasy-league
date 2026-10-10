@@ -11,8 +11,7 @@
  * come from that gameweek's lineup snapshot.
  *
  * Dry run (default) only reads and prints before/after. Nothing is written
- * until you pass --write. Every snapshotted gameweek is rebuilt, including
- * the active one. There is no flag that limits the write to one gameweek.
+ * until you pass --write.
  *
  * Pass --gameweek with a gameweek name or id to rebuild that gameweek only.
  * The name must match exactly. If two gameweeks share a name, pass the id.

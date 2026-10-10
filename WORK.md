@@ -2,7 +2,7 @@
 
 This file is the persistent brain for this repo. Read it at the start of every session. Update it at the end of every session with what changed, what is still broken, and what to do next.
 
-Last updated: 2026-10-10 (Substitutes score at 1x)
+Last updated: 2026-10-10 (Admin recompute for one gameweek)
 
 **Git branch: `ADMIN`** (repo initialized at workspace root `cfl/`)
 
@@ -186,7 +186,7 @@ Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoin
 - My Team badges, dashboard GW Points, Overall, and the leaderboards all use that team's transactions. Admin player total is the unmultiplied base.
 
 Tests: `npm test` in `grassroots-fantasy/`.
-Rebuild (dry run, then write): `npm run points:recompute`. Add `--capture-live` to snapshot the open gameweek. Add `--write` to persist. Read-only audit of finished gameweeks with no snapshot: `npm run points:audit`. It writes nothing and does not build snapshots. Do not run the write or the migration against production until the dry run has been checked. The migration file is `prisma/migrations/20261010103000_gameweek_lineup_snapshots/migration.sql`. It has not been applied.
+Rebuild one gameweek (dry run, then write): `npm run points:recompute -- --gameweek "<name or id>"`, then the same command with `--write`. That is the active gameweek when you pass its exact name or id. Omitting `--gameweek` rebuilds every snapshotted gameweek. A gameweek with no snapshot is skipped unless you also pass `--capture-live`, and that flag only copies the current squad onto the live gameweek. The same one-gameweek recompute is on Admin → Gameweeks → Recompute points: the dialog is a dry run, and Confirm recompute calls `recomputeAllStoredPoints` in the script's transaction. It refuses a gameweek with no lineup snapshot. Read-only audit of finished gameweeks with no snapshot: `npm run points:audit`. It writes nothing and does not build snapshots. Do not run the write against production until the dry run has been checked. The migration file is `prisma/migrations/20261010103000_gameweek_lineup_snapshots/migration.sql`.
 
 ---
 
@@ -350,6 +350,10 @@ Rescoring a finished gameweek was reading `FantasyTeamPlayer`, which only holds 
 `npm run points:audit` is read-only. The pre-fix stat save overwrote each point row and incremented the team total, so a row's ratio is x1, x2, or x3 from the last save, and stacking is `totalPoints` minus the sum of the rows. It does not build snapshots. It has not been run against a database.
 
 `npm run points:freeze -- --gameweek "Week 1"` previews copying today's squads onto that named gameweek, including one that is already finished. `--confirm` writes the snapshot. The same action is on the admin gameweeks page (dry run, then Confirm freeze). It refuses when a snapshot exists, this deadline has not passed, a later gameweek has opened or passed its deadline, or a squad was saved after this deadline. It cannot prove the lock was on the whole time. Safe order: merge, migrate, freeze, re-save the Appearance, audit, recompute dry run, recompute write, and only then end matches and open the next gameweek. Do not run it against the live database from this environment.
+
+### 2026-10-10 — Admin recompute for one gameweek
+
+Merged `ADMIN` (PR #6: current gameweek, postpone/move, `--gameweek`) into the bench 1x branch. Admin → Gameweeks → Recompute points previews that gameweek (before, after, delta, totals) and writes only after Confirm recompute, using `recomputeAllStoredPoints`. A gameweek with no lineup snapshot is refused. The action requires the admin session and logs `[recompute-points]`.
 
 ### 2026-10-10 — Substitutes score at 1x
 
