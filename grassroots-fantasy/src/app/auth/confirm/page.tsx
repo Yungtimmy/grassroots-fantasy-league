@@ -48,24 +48,30 @@ function ConfirmInner() {
       try {
         const { data: { session } } = await supabaseBrowser.auth.getSession();
         const email = session?.user?.email;
-        if (!email) {
-          router.replace("/auth/register");
+        const accessToken = session?.access_token;
+        if (!email || !accessToken) {
+          setError("No verified Google session found. Please try signing in again.");
           return;
         }
 
         const res = await fetch("/api/auth/claim", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ email, accessToken }),
         });
         const data = await res.json();
         if (data.success) {
           router.replace("/dashboard");
-        } else {
+        } else if (res.status === 404) {
           router.replace("/auth/register");
+        } else {
+          setError(data.error || "Authentication failed. Please try signing in again.");
         }
       } catch {
-        router.replace("/auth/register");
+        setError("Something went wrong. Please try signing in again.");
       }
     };
 

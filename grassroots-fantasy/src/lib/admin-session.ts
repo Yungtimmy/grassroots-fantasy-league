@@ -11,9 +11,9 @@ function secret() {
 }
 
 export async function isAdminUnlocked(): Promise<boolean> {
-  const token = cookies().get(COOKIE)?.value;
-  if (!token) return false;
   try {
+    const token = cookies().get(COOKIE)?.value;
+    if (!token) return false;
     const { payload } = await jwtVerify(token, secret());
     return payload.role === "admin";
   } catch {

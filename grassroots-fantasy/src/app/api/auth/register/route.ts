@@ -4,11 +4,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { createToken, setAuthCookie } from "@/lib/auth";
 import { ensureUniversityLeague, getCurrentSeason } from "@/lib/league";
+import { readJsonObject, resolveGoogleIdentity } from "@/lib/verified-identity";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { name, email, username, universityId, facultyId, departmentId } = body;
+    const body = await readJsonObject(request);
+    const identity = await resolveGoogleIdentity(request, body);
+    if (!identity.ok) {
+      return NextResponse.json(
+        { success: false, error: identity.error },
+        { status: identity.status }
+      );
+    }
+    const email = identity.identity.email;
+    const { name, username, universityId, facultyId, departmentId } = body as {
+      name?: string;
+      username?: string;
+      universityId?: string;
+      facultyId?: string;
+      departmentId?: string;
+    };
 
     console.log("Registration attempt:", { name, email, username, universityId });
 
