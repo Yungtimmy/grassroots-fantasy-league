@@ -176,7 +176,7 @@ async function main() {
   console.log("- A ratio of 2 is that last-save multiplier. It is not a regular score that was saved twice.");
   console.log("- The role and the owner are whoever held the player at the last save, not the lineup at the deadline.");
   console.log("- Repeated saves stacked onto the team total only. Inflation gap = stored team total − sum of its rows.");
-  console.log("- Bench players and starters on 0 are not in these rows. This report is not a lineup.");
+  console.log("- These old rows omit substitutes and starters on 0. The current scorer includes substitutes at 1x (BENCH_MULTIPLIER). This report is not a lineup.");
   console.log("- Base points are recomputed per match with the pre-fix stat-save formula (appearance +1, clean sheet even at 0 minutes, penalty miss not scored). The old save stored one match, not the sum of the gameweek.");
   console.log("- Rows whose ratio is not 1, 2, or 3 are unexplained and are left out of the best-supported total.");
   console.log("");

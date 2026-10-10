@@ -2,12 +2,15 @@
  * Pure gameweek scoring. No database access.
  *
  * Captain is always 3x and vice-captain is always 2x, including when both
- * play. There is no fallback that promotes the vice-captain. Only the
- * starting XI scores. Replacing a gameweek's awards (rather than adding
- * them) is what makes a re-save idempotent.
+ * play. There is no fallback that promotes the vice-captain. Those roles
+ * come from the gameweek lineup snapshot. A substitute scores their base
+ * points at BENCH_MULTIPLIER (1x) and that total counts. Replacing a
+ * gameweek's awards (rather than adding them) is what makes a re-save
+ * idempotent.
  *
  * Point values default to the figures below and can be overlaid with
  * ScoringRule rows. Role multipliers live only in ROLE_MULTIPLIERS.
+ * BENCH_MULTIPLIER is the only switch for substitutes: 0 drops them again.
  */
 
 export const ROLE_MULTIPLIERS = {
@@ -15,6 +18,9 @@ export const ROLE_MULTIPLIERS = {
   viceCaptain: 2,
   regular: 1,
 } as const;
+
+/** Substitutes score their base points at this rate. 0 excludes them. */
+export const BENCH_MULTIPLIER = 1;
 
 export type ScoringRules = {
   /** Awarded once per match when minutes > 0. */
@@ -112,6 +118,19 @@ export function roleMultiplier(isCaptain: boolean, isViceCaptain: boolean): numb
   if (isCaptain) return ROLE_MULTIPLIERS.captain;
   if (isViceCaptain) return ROLE_MULTIPLIERS.viceCaptain;
   return ROLE_MULTIPLIERS.regular;
+}
+
+/**
+ * Starting players use the snapshot role. Substitutes always use
+ * BENCH_MULTIPLIER, even if a captain or vice flag was stored on them.
+ */
+export function slotMultiplier(slot: {
+  isStarting: boolean;
+  isCaptain: boolean;
+  isViceCaptain: boolean;
+}): number {
+  if (!slot.isStarting) return BENCH_MULTIPLIER;
+  return roleMultiplier(slot.isCaptain, slot.isViceCaptain);
 }
 
 export function rulesFromRows(
@@ -241,16 +260,19 @@ export function awardsForSquad(
   const chosen = new Map<string, SquadSlot & { basePoints: number; eventType?: string }>();
 
   for (const slot of slots) {
-    if (!slot.isStarting || slot.basePoints === 0) continue;
+    if (slot.basePoints === 0 || slotMultiplier(slot) === 0) continue;
     const key = `${slot.teamId}:${slot.playerId}`;
     const existing = chosen.get(key);
-    if (!existing || roleMultiplier(slot.isCaptain, slot.isViceCaptain) > roleMultiplier(existing.isCaptain, existing.isViceCaptain)) {
-      chosen.set(key, slot);
-    }
+    const slotRate = slotMultiplier(slot);
+    const existingRate = existing ? slotMultiplier(existing) : 0;
+    const preferSlot = !existing
+      || slotRate > existingRate
+      || (slotRate === existingRate && slot.isStarting && !existing.isStarting);
+    if (preferSlot) chosen.set(key, slot);
   }
 
   return [...chosen.values()].map((slot) => {
-    const multiplier = roleMultiplier(slot.isCaptain, slot.isViceCaptain);
+    const multiplier = slotMultiplier(slot);
     return {
       userId: slot.userId,
       teamId: slot.teamId,

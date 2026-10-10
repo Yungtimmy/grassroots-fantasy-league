@@ -2,7 +2,7 @@
 
 This file is the persistent brain for this repo. Read it at the start of every session. Update it at the end of every session with what changed, what is still broken, and what to do next.
 
-Last updated: 2026-10-10 (Lineup snapshots per gameweek, points keyed by team)
+Last updated: 2026-10-10 (Substitutes score at 1x)
 
 **Git branch: `ADMIN`** (repo initialized at workspace root `cfl/`)
 
@@ -168,7 +168,7 @@ DB was force-reset and re-seeded on 2026-09-07.
 
 Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoints` inside one database transaction. It rebuilds that gameweek from the **saved lineup** and stored stats, and **sets** totals. Running it again does not add a second copy.
 
-- Only the starting XI in that gameweek's lineup snapshot scores. Bench players never count. `FantasyTeamPlayer` is the squad managers can still edit; it is not history.
+- The whole squad in that gameweek's lineup snapshot scores. Substitutes score their base points at `BENCH_MULTIPLIER` (1x) and count toward GW Points and Overall. Set it to 0 to drop the bench again. Captain is 3x and vice-captain is 2x for whoever holds those roles in the snapshot, including when both play. `FantasyTeamPlayer` is the squad managers can still edit; it is not history.
 - A snapshot (`gameweek_lineups` plus `gameweeks.lineup_frozen_at`) is taken when an admin moves that gameweek to active or finished, and on the first stat save of the live gameweek if it is not frozen yet. The live gameweek is the earliest one still `upcoming` or `active`. Once it is `finished`, the next gameweek is live and the old squad must not be rebuilt from `FantasyTeamPlayer`.
 - Gameweeks with no snapshot cannot be scored from the current squad. Stat save returns 409. `npm run points:recompute` warns and skips them. `--capture-live` copies the current squad onto the live gameweek only.
 - Points are stored on `teamId`. A manager with two teams in one season gets two totals. Old rows are attached to a team only when that manager had exactly one team in the season (see the migration). Other old rows stay unattributed.
@@ -180,7 +180,7 @@ Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoin
 - Goalkeeper saves are stored and not scored
 - Goal conceded (GK): -2, only when minutes are above 0
 - Yellow -1, Red -3, Own goal -2
-- Captain ×3 and vice-captain ×2, from `ROLE_MULTIPLIERS` in `src/lib/scoring-engine.ts`. Both apply when both play. No vice-captain fallback.
+- Captain ×3 and vice-captain ×2, from `ROLE_MULTIPLIERS` in `src/lib/scoring-engine.ts`. Both apply when both play. No vice-captain fallback. Substitutes use `BENCH_MULTIPLIER` (1), not the captain or vice rate.
 - `ScoringRule` rows override those point values when present. Role multipliers do not read `app_config` (an old seed had captain at 2).
 - Two matches in the same gameweek are added together, then the multiplier is applied once.
 - My Team badges, dashboard GW Points, Overall, and the leaderboards all use that team's transactions. Admin player total is the unmultiplied base.
@@ -350,6 +350,10 @@ Rescoring a finished gameweek was reading `FantasyTeamPlayer`, which only holds 
 `npm run points:audit` is read-only. The pre-fix stat save overwrote each point row and incremented the team total, so a row's ratio is x1, x2, or x3 from the last save, and stacking is `totalPoints` minus the sum of the rows. It does not build snapshots. It has not been run against a database.
 
 `npm run points:freeze -- --gameweek "Week 1"` previews copying today's squads onto that named gameweek, including one that is already finished. `--confirm` writes the snapshot. The same action is on the admin gameweeks page (dry run, then Confirm freeze). It refuses when a snapshot exists, this deadline has not passed, a later gameweek has opened or passed its deadline, or a squad was saved after this deadline. It cannot prove the lock was on the whole time. Safe order: merge, migrate, freeze, re-save the Appearance, audit, recompute dry run, recompute write, and only then end matches and open the next gameweek. Do not run it against the live database from this environment.
+
+### 2026-10-10 — Substitutes score at 1x
+
+`BENCH_MULTIPLIER` in `src/lib/scoring-engine.ts` is 1. The five substitutes score their base points at that rate and the award is stored like any other, so GW Points, Overall, leaderboards, and My Team badges include them. Captain stays 3x and vice stays 2x from the lineup snapshot. A captain or vice flag on a substitute does not raise the rate. Set `BENCH_MULTIPLIER` to 0 to drop the bench again. Do not run `points:recompute --write` against the live database from this environment.
 
 ### 2026-09-11 — Payment guard + fee fix + profile faculty/department
 

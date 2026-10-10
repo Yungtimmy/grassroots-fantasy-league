@@ -555,7 +555,7 @@ export async function gameweekPointsByTeam(
   }).totals;
 }
 
-/** Points for one team in one gameweek. Bench is already excluded by the snapshot. */
+/** Points for one team in one gameweek, including substitutes at BENCH_MULTIPLIER. */
 export async function teamGameweekPointRows(
   db: ScoringDb,
   input: { teamId: string; userId: string; seasonId: string; gameweekId: string },

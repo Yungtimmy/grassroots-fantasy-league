@@ -22,6 +22,7 @@ const scoringRules = [
 const multipliers = [
   { role: "Captain", multiplier: "3x", desc: "All points earned are tripled" },
   { role: "Vice Captain", multiplier: "2x", desc: "All points earned are doubled" },
+  { role: "Substitute", multiplier: "1x", desc: "Bench players score their base points and count in GW Points and Overall" },
 ]
 
 export default function PointsPage() {
@@ -58,7 +59,7 @@ export default function PointsPage() {
         {/* Multipliers */}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 mb-10 backdrop-blur-xl">
           <h3 className="font-display text-lg font-semibold text-white mb-4">Captain Multipliers</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {multipliers.map((m, i) => (
               <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
                 <p className="text-sm text-gray-400 mb-1">{m.role}</p>
