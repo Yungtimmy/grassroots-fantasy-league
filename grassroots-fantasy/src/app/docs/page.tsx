@@ -18,7 +18,7 @@ const sections = [
       "Penalty Save (GK): +5 pts",
       "Goal Conceded (GK): -2 pts",
       "Penalty Miss: -2 pts",
-      "Only the starting XI scores. Substitutes never count",
+      "Substitutes score their base points at 1x and count toward GW Points and Overall",
       "Yellow Card: -1 pt",
       "Red Card: -3 pts",
       "Own Goal: -2 pts",
@@ -28,7 +28,7 @@ const sections = [
   },
   {
     title: "Squad Rules",
-    content: "Build a squad of 16 players within a 1,000m budget. Select 11 starters and 5 substitutes. Choose a captain (3x points) and vice-captain (2x points). You can make unlimited transfers before the gameweek deadline."
+    content: "Build a squad of 16 players within a 1,000m budget. Select 11 starters and 5 substitutes. Choose a captain (3x points) and vice-captain (2x points). Substitutes score at 1x. You can make unlimited transfers before the gameweek deadline."
   },
   {
     title: "Gameweeks",
