@@ -186,7 +186,7 @@ Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoin
 - My Team badges, dashboard GW Points, Overall, and the leaderboards all use that team's transactions. Admin player total is the unmultiplied base.
 
 Tests: `npm test` in `grassroots-fantasy/`.
-Rebuild (dry run, then write): `npm run points:recompute`. Add `--capture-live` to snapshot the open gameweek. Add `--write` to persist. Do not run the write or the migration against production until the dry run has been checked. The migration file is `prisma/migrations/20261010103000_gameweek_lineup_snapshots/migration.sql`. It has not been applied.
+Rebuild (dry run, then write): `npm run points:recompute`. Add `--capture-live` to snapshot the open gameweek. Add `--write` to persist. Read-only audit of finished gameweeks with no snapshot: `npm run points:audit`. It writes nothing and does not build snapshots. Do not run the write or the migration against production until the dry run has been checked. The migration file is `prisma/migrations/20261010103000_gameweek_lineup_snapshots/migration.sql`. It has not been applied.
 
 ---
 
@@ -346,6 +346,8 @@ Stat saves were calling `ScoringService.calculateAllPoints`, which upserted the 
 Rescoring a finished gameweek was reading `FantasyTeamPlayer`, which only holds the current squad. Points were also unique on `(user, player, gameweek)`, so two teams of one manager shared one score.
 
 `GameweekLineup` freezes starter, bench, captain, and vice per team at the live gameweek's lock. Scoring reads that snapshot. The recompute script skips any gameweek with `lineup_frozen_at` null. The migration does not invent historical lineups. It sets `team_id` on existing point rows only when the manager has one team in that season. Do not run the migration or `--write` against the live database from this environment.
+
+`npm run points:audit` is read-only. The pre-fix stat save overwrote each point row and incremented the team total, so a row's ratio is x1, x2, or x3 from the last save, and stacking is `totalPoints` minus the sum of the rows. It does not build snapshots. It has not been run against a database.
 
 ### 2026-09-11 — Payment guard + fee fix + profile faculty/department
 
