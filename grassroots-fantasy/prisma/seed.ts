@@ -11,7 +11,7 @@ async function main() {
   await prisma.scoringRule.createMany({
     data: [
       // Appearance
-      { event: "APPEARANCE", position: null, points: 1, description: "+1 for starting/playing in match" },
+      { event: "APPEARANCE", position: null, points: 2, description: "+2 for playing any minutes" },
 
       // Goals by position
       { event: "GOAL", position: "GK", points: 10, description: "Goal scored by goalkeeper" },
@@ -34,8 +34,9 @@ async function main() {
       { event: "YELLOW_CARD", position: null, points: -1, description: "Yellow card" },
       { event: "RED_CARD", position: null, points: -3, description: "Red card" },
 
-      // Own goals
+      // Own goals and missed penalties. A scored penalty is entered as a goal.
       { event: "OWN_GOAL", position: null, points: -2, description: "Own goal" },
+      { event: "PENALTY_MISS", position: null, points: -2, description: "Penalty missed" },
     ],
   });
 
@@ -54,7 +55,7 @@ async function main() {
     ],
   });
 
-  console.log("Seed completed. 13 scoring rules + 9 config entries.");
+  console.log("Seed completed. 14 scoring rules + 10 config entries.");
 }
 
 main()

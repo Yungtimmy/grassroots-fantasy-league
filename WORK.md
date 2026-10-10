@@ -2,7 +2,7 @@
 
 This file is the persistent brain for this repo. Read it at the start of every session. Update it at the end of every session with what changed, what is still broken, and what to do next.
 
-Last updated: 2026-09-11 (Payment guard, N520 fee, faculty/department profile)
+Last updated: 2026-10-10 (Idempotent gameweek scoring, per-user badges, recompute script)
 
 **Git branch: `ADMIN`** (repo initialized at workspace root `cfl/`)
 
@@ -166,15 +166,24 @@ DB was force-reset and re-seeded on 2026-09-07.
 
 ## Scoring (user-specified rules)
 
-- Appearance: 1 (any minutes)
-- Goal: GK 10, DEF 8, MID 6, FWD 5
+Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoints` inside one database transaction. It rebuilds that gameweek from stored stats and **sets** totals. Running it again does not add a second copy.
+
+- Only the starting XI scores. Bench players never count.
+- Appearance: +2 for any minutes above 0. There is no separate under-60 rate.
+- Goal: GK 10, DEF 8, MID 6, FWD 5 (a scored penalty is entered as a goal, not a second event)
 - Assist 3
-- Clean sheet: GK 5, DEF 4 (no MID)
-- Save (GK) 0, penalty save 5
-- Goal conceded (GK): -2
+- Clean sheet: GK 5, DEF 4, and only when minutes are above 0
+- Penalty save (GK, the PS column): +5. Penalty miss (PM): -2
+- Goalkeeper saves are stored and not scored
+- Goal conceded (GK): -2, only when minutes are above 0
 - Yellow -1, Red -3, Own goal -2
-- Captain ×3, Vice captain ×2
-- No 60+ minute bonus, no penalty miss penalty
+- Captain ×3 and vice-captain ×2, from `ROLE_MULTIPLIERS` in `src/lib/scoring-engine.ts`. Both apply when both play. No vice-captain fallback.
+- `ScoringRule` rows override those point values when present. Role multipliers do not read `app_config` (an old seed had captain at 2).
+- Two matches in the same gameweek are added together, then the multiplier is applied once.
+- My Team badges come from that manager's own gameweek transactions. Their sum is dashboard GW Points. Overall and both leaderboards use the team total. Admin player total is the unmultiplied base.
+
+Tests: `npm test` in `grassroots-fantasy/`.
+Rebuild live totals (dry run, then write): `npm run points:recompute` and `npm run points:recompute -- --write`. Do not run the write against production until the dry run has been checked.
 
 ---
 
@@ -192,7 +201,7 @@ Fixed 2026-09-08 (this session):
 
 Still open:
 
-1. Vice-captain does not take the multiplier if captain blanks.
+1. Vice-captain stays on 2x when the captain blanks. That is the rule (no fallback), not a bug.
 2. Register still auto-joins the league; payment verify does not enroll (two funnels).
 3. No deadline lock on squad edits.
 4. No max-3-per-club rule.
@@ -322,6 +331,12 @@ Paste the Supabase **connection string** (Session pooler URI) or the **database 
 - Test payment flow with Flutterwave in development mode.
 - Tests (no test framework yet).
 - Deadline lock, max-3-per-club, vice-captain fallback.
+
+### 2026-10-10 — Idempotent scoring
+
+Stat saves were calling `ScoringService.calculateAllPoints`, which upserted the gameweek transaction but **incremented** `FantasyTeam.totalPoints` on every save. A second save of the same fixture added the points again. Two matches in one gameweek overwrote the single `(user, player, gameweek)` row and still incremented the team total for both. Bench players were included. My Team badges read every manager's transaction for that player and kept one of them, so a captain multiplier could show on the wrong squad.
+
+`recomputeGameweekPoints` now replaces the gameweek inside a transaction. Failures roll back and the admin stats modal shows the error. `npm run points:recompute` prints before/after and writes only with `--write`.
 
 ### 2026-09-11 — Payment guard + fee fix + profile faculty/department
 
