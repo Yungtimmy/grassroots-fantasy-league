@@ -31,6 +31,7 @@ export const prismaMock = {
   playerMatchStatistic: model(),
   match: model(),
   gameweek: model(),
+  gameweekLineup: model(),
   realPlayer: model(),
   $transaction: vi.fn(async (ops: unknown) => {
     if (Array.isArray(ops)) return Promise.all(ops);
@@ -51,6 +52,7 @@ const models = [
   prismaMock.playerMatchStatistic,
   prismaMock.match,
   prismaMock.gameweek,
+  prismaMock.gameweekLineup,
   prismaMock.realPlayer,
 ];
 
