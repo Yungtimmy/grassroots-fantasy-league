@@ -4,7 +4,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAuthUser, removeAuthCookie } from "@/lib/auth";
 import { getCurrentSeason } from "@/lib/league";
+import { findDisplayedGameweek } from "@/lib/gameweek";
 import { LeaderboardService } from "@/lib/leaderboard";
+import { teamGameweekPointRows } from "@/lib/scoring";
 
 export async function GET() {
   try {
@@ -112,17 +114,19 @@ export async function GET() {
       : null;
 
     let gameweekPoints = 0;
-    // Get latest gameweek that has any transactions
-    const lastGameweek = await prisma.gameweek.findFirst({
-      where: { seasonId: season.id },
-      orderBy: { number: "desc" },
-    });
-    if (lastGameweek) {
-      const gwPoints = await prisma.fantasyPointTransaction.aggregate({
-        where: { userId: authUser.userId, gameweekId: lastGameweek.id },
-        _sum: { totalPoints: true },
+    const gwPointsByPlayer = new Map<string, number>();
+    const displayedGameweek = await findDisplayedGameweek(season.id);
+    if (displayedGameweek && team) {
+      const rows = await teamGameweekPointRows(prisma, {
+        teamId: team.id,
+        userId: authUser.userId,
+        seasonId: season.id,
+        gameweekId: displayedGameweek.id,
       });
-      gameweekPoints = gwPoints._sum.totalPoints ?? 0;
+      for (const row of rows) {
+        gwPointsByPlayer.set(row.playerId, (gwPointsByPlayer.get(row.playerId) ?? 0) + row.totalPoints);
+      }
+      gameweekPoints = [...gwPointsByPlayer.values()].reduce((sum, points) => sum + points, 0);
     }
 
     let universityRank = 0;
@@ -134,10 +138,10 @@ export async function GET() {
         membership.league.universityId,
         season.id
       );
-      universityRank = uniBoard.find((e) => e.userId === authUser.userId)?.rank ?? 0;
+      universityRank = uniBoard.find((e) => e.teamId === team?.id)?.rank ?? 0;
 
       const grass = await LeaderboardService.getGrassrootsLeaderboard(season.id, 500, 0);
-      grassrootsRank = grass.find((e) => e.userId === authUser.userId)?.rank ?? 0;
+      grassrootsRank = grass.find((e) => e.teamId === team?.id)?.rank ?? 0;
 
       const myRank = grassrootsRank;
       if (myRank > 0) {
@@ -148,7 +152,7 @@ export async function GET() {
             rank: p.rank,
             name: p.username || p.name,
             points: p.totalPoints,
-            isYou: p.userId === authUser.userId,
+            isYou: p.teamId === team?.id,
           }));
       }
     }
@@ -201,7 +205,7 @@ export async function GET() {
         team?.players.map((p) => ({
           name: p.player.name,
           position: p.position,
-          points: p.player.totalPoints,
+          points: gwPointsByPlayer.get(p.playerId) ?? 0,
           realTeam: p.player.realTeam.shortName,
         })) ?? [],
       nextGameweek: nextGameweek

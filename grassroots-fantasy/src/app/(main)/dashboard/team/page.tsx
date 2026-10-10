@@ -56,12 +56,14 @@ export default function TeamPage() {
             players: (team.players ?? []).map((tp: {
               isCaptain: boolean
               isViceCaptain: boolean
+              isStarting: boolean
               position: string
+              gameweekPoints?: number
               player: { name: string; position: string; totalPoints: number; realTeam?: { shortName: string } }
             }) => ({
               name: tp.player.name,
               position: tp.player.position,
-              points: tp.player.totalPoints,
+              points: tp.gameweekPoints ?? 0,
               isCaptain: tp.isCaptain,
               isViceCaptain: tp.isViceCaptain,
               team: tp.player.realTeam?.shortName ?? "",
@@ -179,7 +181,9 @@ export default function TeamPage() {
                           <span className="text-xs font-medium leading-tight px-1 truncate w-full">
                             {player.name.split(" ").pop()}
                           </span>
-                          <span className="text-[10px] text-surface-400">{player.points} pts</span>
+                          <span className="text-[10px] text-surface-400">
+                            {player.points > 0 ? `+${player.points}` : player.points}
+                          </span>
                         </div>
                       )
                     })}
@@ -200,7 +204,9 @@ export default function TeamPage() {
                   <span className="flex-1 text-sm font-medium">{player.name}</span>
                   <span className="text-xs text-surface-400 w-10 text-center">{player.position}</span>
                   <span className="text-xs text-surface-500 w-20 text-center">{player.team}</span>
-                  <span className="text-sm font-mono text-brand-400 w-12 text-right">{player.points}</span>
+                  <span className="text-sm font-mono text-brand-400 w-12 text-right">
+                    {player.points > 0 ? `+${player.points}` : player.points}
+                  </span>
                   {player.isCaptain && (
                     <span className="rounded bg-yellow-500/20 px-1.5 py-0.5 text-[10px] font-bold text-yellow-400">C</span>
                   )}

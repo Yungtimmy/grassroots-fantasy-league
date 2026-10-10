@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { ScoringService } from "@/lib/scoring";
+import { ScoringError, recomputeGameweekPoints } from "@/lib/scoring";
 
 export async function GET(
   _request: NextRequest,
@@ -94,69 +94,76 @@ export async function PUT(
       );
     }
 
-    for (const stat of stats) {
-      // Skip players with no meaningful data
-      const hasData = stat.minutes > 0 || stat.goals > 0 || stat.assists > 0 ||
-        stat.saves > 0 || stat.yellowCards > 0 || stat.redCards > 0 ||
-        stat.ownGoals > 0 || stat.penaltyMiss > 0 || stat.penaltySave > 0 ||
-        stat.goalsConceded > 0 || stat.cleanSheet;
-
-      if (!hasData) continue;
-
-      await prisma.playerMatchStatistic.upsert({
-        where: {
-          playerId_matchId: { playerId: stat.playerId, matchId },
-        },
-        create: {
-          playerId: stat.playerId,
-          matchId,
-          minutes: stat.minutes ?? 0,
-          goals: stat.goals ?? 0,
-          assists: stat.assists ?? 0,
-          cleanSheet: stat.cleanSheet ?? false,
-          saves: stat.saves ?? 0,
-          yellowCards: stat.yellowCards ?? 0,
-          redCards: stat.redCards ?? 0,
-          ownGoals: stat.ownGoals ?? 0,
-          penaltyMiss: stat.penaltyMiss ?? 0,
-          penaltySave: stat.penaltySave ?? 0,
-          goalsConceded: stat.goalsConceded ?? 0,
-        },
-        update: {
-          minutes: stat.minutes ?? 0,
-          goals: stat.goals ?? 0,
-          assists: stat.assists ?? 0,
-          cleanSheet: stat.cleanSheet ?? false,
-          saves: stat.saves ?? 0,
-          yellowCards: stat.yellowCards ?? 0,
-          redCards: stat.redCards ?? 0,
-          ownGoals: stat.ownGoals ?? 0,
-          penaltyMiss: stat.penaltyMiss ?? 0,
-          penaltySave: stat.penaltySave ?? 0,
-          goalsConceded: stat.goalsConceded ?? 0,
-        },
-      });
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      select: { gameweekId: true },
+    });
+    if (!match) {
+      return NextResponse.json({ success: false, error: "Match not found" }, { status: 404 });
     }
 
-    // Auto-run scoring after saving stats
-    try {
-      const match = await prisma.match.findUnique({
-        where: { id: matchId },
-        select: { gameweekId: true },
-      });
-      if (match) {
-        await ScoringService.calculateAllPoints(matchId, match.gameweekId);
+    const normalized = stats.map((stat) => ({
+      playerId: String(stat?.playerId ?? ""),
+      minutes: count(stat?.minutes),
+      goals: count(stat?.goals),
+      assists: count(stat?.assists),
+      cleanSheet: Boolean(stat?.cleanSheet),
+      saves: count(stat?.saves),
+      yellowCards: count(stat?.yellowCards),
+      redCards: count(stat?.redCards),
+      ownGoals: count(stat?.ownGoals),
+      penaltyMiss: count(stat?.penaltyMiss),
+      penaltySave: count(stat?.penaltySave),
+      goalsConceded: count(stat?.goalsConceded),
+    }));
+
+    if (normalized.some((stat) => !stat.playerId)) {
+      return NextResponse.json(
+        { success: false, error: "Every stat row needs a playerId" },
+        { status: 400 },
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const stat of normalized) {
+        const data = {
+          minutes: stat.minutes,
+          goals: stat.goals,
+          assists: stat.assists,
+          cleanSheet: stat.cleanSheet,
+          saves: stat.saves,
+          yellowCards: stat.yellowCards,
+          redCards: stat.redCards,
+          ownGoals: stat.ownGoals,
+          penaltyMiss: stat.penaltyMiss,
+          penaltySave: stat.penaltySave,
+          goalsConceded: stat.goalsConceded,
+        };
+        await tx.playerMatchStatistic.upsert({
+          where: { playerId_matchId: { playerId: stat.playerId, matchId } },
+          create: { playerId: stat.playerId, matchId, ...data },
+          update: data,
+        });
       }
-    } catch (scoringError) {
-      console.error("Auto-scoring failed:", scoringError);
-      // Don't fail the request, stats were saved
-    }
+
+      await recomputeGameweekPoints(match.gameweekId, tx);
+    }, { maxWait: 10_000, timeout: 60_000 });
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Update match stats error:", error);
     const message = error instanceof Error ? error.message : "Internal server error";
-    const status = message === "Forbidden" ? 403 : 500;
+    const status = error instanceof ScoringError
+      ? error.status
+      : message === "Forbidden"
+        ? 403
+        : 500;
     return NextResponse.json({ success: false, error: message }, { status });
   }
+}
+
+function count(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.trunc(parsed);
 }

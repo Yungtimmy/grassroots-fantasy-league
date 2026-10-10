@@ -81,6 +81,7 @@ export default function MatchesPage() {
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [matchScores, setMatchScores] = useState<{ homeScore: number | null; awayScore: number | null }>({ homeScore: null, awayScore: null });
   const [formError, setFormError] = useState("");
+  const [statsError, setStatsError] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -192,6 +193,7 @@ export default function MatchesPage() {
     setSelectedMatch(match);
     setStatsModal(true);
     setStatsLoading(true);
+    setStatsError("");
     setActiveAction(null);
     try {
       const res = await fetch(`/api/admin/matches/${match.id}/stats`);
@@ -210,18 +212,22 @@ export default function MatchesPage() {
   async function saveStats() {
     if (!selectedMatch) return;
     setSaving(true);
+    setStatsError("");
     try {
       const res = await fetch(`/api/admin/matches/${selectedMatch.id}/stats`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stats: playerStats }),
       });
-      const data = await res.json();
-      if (data.success) {
-        setStatsModal(false);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setStatsError(data.error || `Save failed (${res.status}). Points were not changed.`);
+        return;
       }
+      setStatsModal(false);
+      setActiveAction(null);
     } catch {
-      // silent
+      setStatsError("Network error. Points were not changed.");
     } finally {
       setSaving(false);
     }
@@ -264,20 +270,15 @@ export default function MatchesPage() {
       const homeScore = matchScores.homeScore ?? 0;
       const awayScore = matchScores.awayScore ?? 0;
       return prev.map((ps) => {
-        // Home team defenders/GK get clean sheet if away team scored 0
-        if (ps.isHome && awayScore === 0 && (ps.position === "GK" || ps.position === "DEF")) {
+        if (ps.position !== "GK" && ps.position !== "DEF") return ps;
+        if (ps.minutes <= 0) {
+          return { ...ps, cleanSheet: false, goalsConceded: 0 };
+        }
+        const conceded = ps.isHome ? awayScore : homeScore;
+        if (conceded === 0) {
           return { ...ps, cleanSheet: true, goalsConceded: 0 };
         }
-        // Away team defenders/GK get clean sheet if home team scored 0
-        if (!ps.isHome && homeScore === 0 && (ps.position === "GK" || ps.position === "DEF")) {
-          return { ...ps, cleanSheet: true, goalsConceded: 0 };
-        }
-        // Otherwise, remove clean sheet and set goals conceded
-        if (ps.position === "GK" || ps.position === "DEF") {
-          const goalsConceded = ps.isHome ? awayScore : homeScore;
-          return { ...ps, cleanSheet: false, goalsConceded };
-        }
-        return ps;
+        return { ...ps, cleanSheet: false, goalsConceded: conceded };
       });
     });
   }
@@ -732,8 +733,16 @@ export default function MatchesPage() {
               </div>
             </div>
 
+            {statsError && (
+              <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {statsError}
+              </p>
+            )}
+            <p className="text-xs text-surface-500">
+              Saving again replaces this gameweek&apos;s points. It does not add a second copy.
+            </p>
             <ModalFooter>
-              <Button variant="ghost" onClick={() => { setStatsModal(false); setActiveAction(null); }}>
+              <Button variant="ghost" onClick={() => { setStatsModal(false); setActiveAction(null); setStatsError(""); }}>
                 Cancel
               </Button>
               <Button onClick={saveStats} loading={saving}>

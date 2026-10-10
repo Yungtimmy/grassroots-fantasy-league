@@ -134,12 +134,14 @@ model FantasyTeam {
   formation   String              @default("4-4-2")
   budget      Int                 @default(1000)
   usedBudget  Int                 @default(0) @map("used_budget")
-  totalPoints Int                 @default(0) @map("total_points")
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
-  players     FantasyTeamPlayer[]
-  league      UniversityLeague    @relation(fields: [leagueId], references: [id])
-  user        User                @relation(fields: [userId], references: [id])
+  totalPoints       Int                       @default(0) @map("total_points")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+  players           FantasyTeamPlayer[]
+  lineups           GameweekLineup[]
+  pointTransactions FantasyPointTransaction[]
+  league            UniversityLeague          @relation(fields: [leagueId], references: [id])
+  user              User                      @relation(fields: [userId], references: [id])
 
   @@unique([userId, leagueId])
   @@index([userId])
@@ -193,6 +195,7 @@ model RealPlayer {
   updatedAt          DateTime                  @updatedAt @map("updated_at")
   pointTransactions  FantasyPointTransaction[]
   fantasyTeamPlayers FantasyTeamPlayer[]
+  gameweekLineups    GameweekLineup[]
   matchStats         PlayerMatchStatistic[]
   realTeam           RealTeam                  @relation(fields: [realTeamId], references: [id])
 
@@ -223,9 +226,11 @@ model Gameweek {
   startDate         DateTime                  @map("start_date")
   endDate           DateTime                  @map("end_date")
   status            String                    @default("upcoming")
+  lineupFrozenAt    DateTime?                 @map("lineup_frozen_at")
   createdAt         DateTime                  @default(now()) @map("created_at")
   updatedAt         DateTime                  @updatedAt @map("updated_at")
   pointTransactions FantasyPointTransaction[]
+  lineups           GameweekLineup[]
   season            Season                    @relation(fields: [seasonId], references: [id])
   matches           Match[]
 
@@ -284,22 +289,46 @@ model PlayerMatchStatistic {
   @@map("player_match_statistics")
 }
 
-model FantasyPointTransaction {
-  id          String     @id @default(cuid())
-  userId      String     @map("user_id")
-  playerId    String     @map("player_id")
-  gameweekId  String     @map("gameweek_id")
-  eventType   String     @map("event_type")
-  basePoints  Int        @map("base_points")
-  multiplier  Int        @default(1)
-  totalPoints Int        @map("total_points")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  gameweek    Gameweek   @relation(fields: [gameweekId], references: [id])
-  player      RealPlayer @relation(fields: [playerId], references: [id])
-  user        User       @relation(fields: [userId], references: [id])
+model GameweekLineup {
+  id            String      @id @default(cuid())
+  gameweekId    String      @map("gameweek_id")
+  teamId        String      @map("team_id")
+  playerId      String      @map("player_id")
+  isCaptain     Boolean     @default(false) @map("is_captain")
+  isViceCaptain Boolean     @default(false) @map("is_vice_captain")
+  isStarting    Boolean     @default(true) @map("is_starting")
+  position      String
+  createdAt     DateTime    @default(now()) @map("created_at")
+  gameweek      Gameweek    @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+  team          FantasyTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player        RealPlayer  @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, playerId, gameweekId])
+  @@unique([gameweekId, teamId, playerId])
+  @@index([gameweekId])
+  @@index([teamId])
+  @@index([playerId])
+  @@map("gameweek_lineups")
+}
+
+model FantasyPointTransaction {
+  id          String       @id @default(cuid())
+  userId      String       @map("user_id")
+  teamId      String?      @map("team_id")
+  playerId    String       @map("player_id")
+  gameweekId  String       @map("gameweek_id")
+  eventType   String       @map("event_type")
+  basePoints  Int          @map("base_points")
+  multiplier  Int          @default(1)
+  totalPoints Int          @map("total_points")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  gameweek    Gameweek     @relation(fields: [gameweekId], references: [id])
+  player      RealPlayer   @relation(fields: [playerId], references: [id])
+  team        FantasyTeam? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@unique([teamId, playerId, gameweekId])
   @@index([userId])
+  @@index([teamId])
   @@index([playerId])
   @@index([gameweekId])
   @@map("fantasy_point_transactions")

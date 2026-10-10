@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { getAuthUser, requireAuth } from "@/lib/auth";
 import { FANTASY_BUDGET } from "@/lib/utils";
 import { getCurrentSeason } from "@/lib/league";
+import { findDisplayedGameweek } from "@/lib/gameweek";
+import { teamGameweekPointRows, updateLiveSnapshotForTeam } from "@/lib/scoring";
 
 const STARTING_SIZE = 11;
 const SUB_SIZE = 5;
@@ -106,25 +108,25 @@ export async function GET() {
       return NextResponse.json({ success: true, data: null });
     }
 
-    // Get gameweek for per-player GW points (most recent with any status)
+    // Same gameweek the dashboard uses for GW Points.
     const season = await getCurrentSeason();
-    const activeGw = season ? await prisma.gameweek.findFirst({
-      where: { seasonId: season.id },
-      orderBy: { number: "desc" },
-    }) : null;
+    const activeGw = season ? await findDisplayedGameweek(season.id) : null;
 
-    // Fetch gameweek points per player
-    const playerIds = team.players.map((p: { player: { id: string } }) => p.player.id);
-    const gwTransactions = activeGw ? await prisma.fantasyPointTransaction.findMany({
-      where: { gameweekId: activeGw.id, playerId: { in: playerIds } },
+    const gwTransactions = activeGw ? await teamGameweekPointRows(prisma, {
+      teamId: team.id,
+      userId: authUser.userId,
+      seasonId: ctx.seasonId,
+      gameweekId: activeGw.id,
     }) : [];
-    const gwPointsMap = new Map(gwTransactions.map((t) => [t.playerId, t.totalPoints]));
+    const gwPointsMap = new Map<string, number>();
+    for (const txn of gwTransactions) {
+      gwPointsMap.set(txn.playerId, (gwPointsMap.get(txn.playerId) ?? 0) + txn.totalPoints);
+    }
 
-    // Enrich team data with GW points
     const enrichedTeam = {
       ...team,
       gameweekId: activeGw?.id ?? null,
-      players: team.players.map((p: any) => ({
+      players: team.players.map((p) => ({
         ...p,
         gameweekPoints: gwPointsMap.get(p.player.id) ?? 0,
       })),
@@ -292,6 +294,7 @@ async function saveTeam(request: NextRequest, isUpdate: boolean) {
           ...p,
         })),
       });
+      await updateLiveSnapshotForTeam(prisma, ctx.seasonId, existing.id, resolvedPlayers);
     }
 
     const fullTeam = await prisma.fantasyTeam.findUnique({

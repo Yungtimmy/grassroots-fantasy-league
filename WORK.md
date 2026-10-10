@@ -2,7 +2,7 @@
 
 This file is the persistent brain for this repo. Read it at the start of every session. Update it at the end of every session with what changed, what is still broken, and what to do next.
 
-Last updated: 2026-09-11 (Payment guard, N520 fee, faculty/department profile)
+Last updated: 2026-10-10 (Lineup snapshots per gameweek, points keyed by team)
 
 **Git branch: `ADMIN`** (repo initialized at workspace root `cfl/`)
 
@@ -166,15 +166,27 @@ DB was force-reset and re-seeded on 2026-09-07.
 
 ## Scoring (user-specified rules)
 
-- Appearance: 1 (any minutes)
-- Goal: GK 10, DEF 8, MID 6, FWD 5
+Stat saves and the admin "apply scoring" action both call `recomputeGameweekPoints` inside one database transaction. It rebuilds that gameweek from the **saved lineup** and stored stats, and **sets** totals. Running it again does not add a second copy.
+
+- Only the starting XI in that gameweek's lineup snapshot scores. Bench players never count. `FantasyTeamPlayer` is the squad managers can still edit; it is not history.
+- A snapshot (`gameweek_lineups` plus `gameweeks.lineup_frozen_at`) is taken when an admin moves that gameweek to active or finished, and on the first stat save of the live gameweek if it is not frozen yet. The live gameweek is the earliest one still `upcoming` or `active`. Once it is `finished`, the next gameweek is live and the old squad must not be rebuilt from `FantasyTeamPlayer`.
+- Gameweeks with no snapshot cannot be scored from the current squad. Stat save returns 409. `npm run points:recompute` warns and skips them. `--capture-live` copies the current squad onto the live gameweek only.
+- Points are stored on `teamId`. A manager with two teams in one season gets two totals. Old rows are attached to a team only when that manager had exactly one team in the season (see the migration). Other old rows stay unattributed.
+- Appearance: +2 for any minutes above 0. There is no separate under-60 rate.
+- Goal: GK 10, DEF 8, MID 6, FWD 5 (a scored penalty is entered as a goal, not a second event)
 - Assist 3
-- Clean sheet: GK 5, DEF 4 (no MID)
-- Save (GK) 0, penalty save 5
-- Goal conceded (GK): -2
+- Clean sheet: GK 5, DEF 4, and only when minutes are above 0
+- Penalty save (GK, the PS column): +5. Penalty miss (PM): -2
+- Goalkeeper saves are stored and not scored
+- Goal conceded (GK): -2, only when minutes are above 0
 - Yellow -1, Red -3, Own goal -2
-- Captain ×3, Vice captain ×2
-- No 60+ minute bonus, no penalty miss penalty
+- Captain ×3 and vice-captain ×2, from `ROLE_MULTIPLIERS` in `src/lib/scoring-engine.ts`. Both apply when both play. No vice-captain fallback.
+- `ScoringRule` rows override those point values when present. Role multipliers do not read `app_config` (an old seed had captain at 2).
+- Two matches in the same gameweek are added together, then the multiplier is applied once.
+- My Team badges, dashboard GW Points, Overall, and the leaderboards all use that team's transactions. Admin player total is the unmultiplied base.
+
+Tests: `npm test` in `grassroots-fantasy/`.
+Rebuild (dry run, then write): `npm run points:recompute`. Add `--capture-live` to snapshot the open gameweek. Add `--write` to persist. Read-only audit of finished gameweeks with no snapshot: `npm run points:audit`. It writes nothing and does not build snapshots. Do not run the write or the migration against production until the dry run has been checked. The migration file is `prisma/migrations/20261010103000_gameweek_lineup_snapshots/migration.sql`. It has not been applied.
 
 ---
 
@@ -192,7 +204,7 @@ Fixed 2026-09-08 (this session):
 
 Still open:
 
-1. Vice-captain does not take the multiplier if captain blanks.
+1. Vice-captain stays on 2x when the captain blanks. That is the rule (no fallback), not a bug.
 2. Register still auto-joins the league; payment verify does not enroll (two funnels).
 3. No deadline lock on squad edits.
 4. No max-3-per-club rule.
@@ -322,6 +334,22 @@ Paste the Supabase **connection string** (Session pooler URI) or the **database 
 - Test payment flow with Flutterwave in development mode.
 - Tests (no test framework yet).
 - Deadline lock, max-3-per-club, vice-captain fallback.
+
+### 2026-10-10 — Idempotent scoring
+
+Stat saves were calling `ScoringService.calculateAllPoints`, which upserted the gameweek transaction but **incremented** `FantasyTeam.totalPoints` on every save. A second save of the same fixture added the points again. Two matches in one gameweek overwrote the single `(user, player, gameweek)` row and still incremented the team total for both. Bench players were included. My Team badges read every manager's transaction for that player and kept one of them, so a captain multiplier could show on the wrong squad.
+
+`recomputeGameweekPoints` now replaces the gameweek inside a transaction. Failures roll back and the admin stats modal shows the error. `npm run points:recompute` prints before/after and writes only with `--write`.
+
+### 2026-10-10 — Lineup snapshots and team-keyed points
+
+Rescoring a finished gameweek was reading `FantasyTeamPlayer`, which only holds the current squad. Points were also unique on `(user, player, gameweek)`, so two teams of one manager shared one score.
+
+`GameweekLineup` freezes starter, bench, captain, and vice per team at the live gameweek's lock. Scoring reads that snapshot. The recompute script skips any gameweek with `lineup_frozen_at` null. The migration does not invent historical lineups. It sets `team_id` on existing point rows only when the manager has one team in that season. Do not run the migration or `--write` against the live database from this environment.
+
+`npm run points:audit` is read-only. The pre-fix stat save overwrote each point row and incremented the team total, so a row's ratio is x1, x2, or x3 from the last save, and stacking is `totalPoints` minus the sum of the rows. It does not build snapshots. It has not been run against a database.
+
+`npm run points:freeze -- --gameweek "Week 1"` previews copying today's squads onto that named gameweek, including one that is already finished. `--confirm` writes the snapshot. The same action is on the admin gameweeks page (dry run, then Confirm freeze). It refuses when a snapshot exists, this deadline has not passed, a later gameweek has opened or passed its deadline, or a squad was saved after this deadline. It cannot prove the lock was on the whole time. Safe order: merge, migrate, freeze, re-save the Appearance, audit, recompute dry run, recompute write, and only then end matches and open the next gameweek. Do not run it against the live database from this environment.
 
 ### 2026-09-11 — Payment guard + fee fix + profile faculty/department
 

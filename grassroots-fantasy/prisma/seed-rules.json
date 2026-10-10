@@ -1,5 +1,5 @@
 [
-  {"id":"seed_appearance","event":"APPEARANCE","position":null,"points":2,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"2 pts for 60+ minutes, 1 pt otherwise"},
+  {"id":"seed_appearance","event":"APPEARANCE","position":null,"points":2,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"+2 for playing any minutes"},
   {"id":"seed_goal_gk","event":"GOAL","position":"GK","points":10,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Goal scored by goalkeeper"},
   {"id":"seed_goal_def","event":"GOAL","position":"DEF","points":6,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Goal scored by defender"},
   {"id":"seed_goal_mid","event":"GOAL","position":"MID","points":5,"created_at":"2026-09-08T13:00:00.000Z","updated_at":"2026-09-08T13:00:00.000Z","description":"Goal scored by midfielder"},
