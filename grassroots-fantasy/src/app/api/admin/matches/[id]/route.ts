@@ -3,6 +3,26 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import {
+  FixtureAdminError,
+  buildMatchUpdate,
+  recomputePlanForFixtureDelete,
+  recomputePlanForFixtureEdit,
+} from "@/lib/fixture-admin";
+import { ScoringError, recomputeGameweekPoints } from "@/lib/scoring";
+
+const TX = { maxWait: 10_000, timeout: 60_000 } as const;
+
+function errorResponse(error: unknown) {
+  console.error("Admin match error:", error);
+  const message = error instanceof Error ? error.message : "Internal server error";
+  const status = error instanceof ScoringError || error instanceof FixtureAdminError
+    ? error.status
+    : message === "Forbidden" || message === "Unauthorized"
+      ? 403
+      : 500;
+  return NextResponse.json({ success: false, error: message }, { status });
+}
 
 export async function PUT(
   request: NextRequest,
@@ -12,34 +32,50 @@ export async function PUT(
     await requireAdmin();
     const body = await request.json();
 
-    const updateData: Record<string, unknown> = {};
-    if (body.homeScore !== undefined) updateData.homeScore = body.homeScore;
-    if (body.awayScore !== undefined) updateData.awayScore = body.awayScore;
-    if (body.gameweekId) updateData.gameweekId = body.gameweekId;
-    if (body.homeTeamId) updateData.homeTeamId = body.homeTeamId;
-    if (body.awayTeamId) updateData.awayTeamId = body.awayTeamId;
-    if (body.venue !== undefined) updateData.venue = body.venue || null;
-    if (body.time !== undefined) updateData.time = body.time || null;
-    if (body.date) {
-      updateData.date = body.time ? new Date(`${body.date}T${body.time}`) : new Date(body.date);
-    }
-    if (body.status) {
-      updateData.status = body.status;
-    } else if (body.homeScore !== undefined && body.awayScore !== undefined) {
-      updateData.status = "finished";
-    }
+    const match = await prisma.$transaction(async (tx) => {
+      const existing = await tx.match.findUnique({
+        where: { id: params.id },
+        select: {
+          id: true,
+          gameweekId: true,
+          _count: { select: { playerStats: true } },
+        },
+      });
+      if (!existing) throw new FixtureAdminError("Match not found", 404);
 
-    const match = await prisma.match.update({
-      where: { id: params.id },
-      data: updateData,
-    });
+      const nextGameweekId = typeof body.gameweekId === "string" && body.gameweekId
+        ? body.gameweekId
+        : existing.gameweekId;
+
+      if (nextGameweekId !== existing.gameweekId) {
+        const target = await tx.gameweek.findUnique({
+          where: { id: nextGameweekId },
+          select: { id: true },
+        });
+        if (!target) throw new FixtureAdminError("Gameweek not found", 404);
+      }
+
+      const updated = await tx.match.update({
+        where: { id: params.id },
+        data: buildMatchUpdate(body),
+      });
+
+      const gameweekIds = recomputePlanForFixtureEdit({
+        statCount: existing._count.playerStats,
+        previousGameweekId: existing.gameweekId,
+        nextGameweekId,
+        body,
+      });
+      for (const gameweekId of gameweekIds) {
+        await recomputeGameweekPoints(gameweekId, tx);
+      }
+
+      return updated;
+    }, TX);
 
     return NextResponse.json({ success: true, data: match });
   } catch (error) {
-    console.error("Update match error:", error);
-    const message = error instanceof Error ? error.message : "Internal server error";
-    const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 500;
-    return NextResponse.json({ success: false, error: message }, { status });
+    return errorResponse(error);
   }
 }
 
@@ -49,13 +85,27 @@ export async function DELETE(
 ) {
   try {
     await requireAdmin();
-    await prisma.playerMatchStatistic.deleteMany({ where: { matchId: params.id } });
-    await prisma.match.delete({ where: { id: params.id } });
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.match.findUnique({
+        where: { id: params.id },
+        select: {
+          id: true,
+          gameweekId: true,
+          _count: { select: { playerStats: true } },
+        },
+      });
+      if (!existing) throw new FixtureAdminError("Match not found", 404);
+
+      await tx.playerMatchStatistic.deleteMany({ where: { matchId: params.id } });
+      await tx.match.delete({ where: { id: params.id } });
+
+      for (const gameweekId of recomputePlanForFixtureDelete(existing._count.playerStats, existing.gameweekId)) {
+        await recomputeGameweekPoints(gameweekId, tx);
+      }
+    }, TX);
+
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete match error:", error);
-    const message = error instanceof Error ? error.message : "Internal server error";
-    const status = message === "Forbidden" || message === "Unauthorized" ? 403 : 500;
-    return NextResponse.json({ success: false, error: message }, { status });
+    return errorResponse(error);
   }
 }

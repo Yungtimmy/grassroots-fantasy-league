@@ -1,4 +1,5 @@
 import { prisma } from './db';
+import { findDisplayedGameweek } from './gameweek';
 import { gameweekPointsByTeam } from './scoring';
 
 export class LeaderboardService {
@@ -28,31 +29,32 @@ export class LeaderboardService {
       movement: 0,
     }));
 
-    if (gameweekId) {
-      const byTeam = await gameweekPointsByTeam(prisma, {
+    const displayed = await findDisplayedGameweek(seasonId);
+    const columnId = gameweekId ?? displayed?.id;
+    const teamRefs = leaderboard.map((entry) => ({ teamId: entry.teamId, userId: entry.userId }));
+    let columnPoints: Record<string, number> | null = null;
+    if (columnId) {
+      columnPoints = await gameweekPointsByTeam(prisma, {
         seasonId,
-        gameweekId,
-        teams: leaderboard.map((entry) => ({ teamId: entry.teamId, userId: entry.userId })),
+        gameweekId: columnId,
+        teams: teamRefs,
       });
       for (const entry of leaderboard) {
-        entry.gameweekPoints = byTeam[entry.teamId] ?? 0;
+        entry.gameweekPoints = columnPoints[entry.teamId] ?? 0;
       }
     }
 
     leaderboard.sort((a, b) => b.totalPoints - a.totalPoints);
     leaderboard.forEach((entry, i) => { entry.rank = i + 1; });
 
-    const latestFinished = await prisma.gameweek.findFirst({
-      where: { seasonId, status: 'finished' },
-      orderBy: { number: 'desc' },
-    });
-
-    if (latestFinished) {
-      const gwLookup = await gameweekPointsByTeam(prisma, {
-        seasonId,
-        gameweekId: latestFinished.id,
-        teams: leaderboard.map((entry) => ({ teamId: entry.teamId, userId: entry.userId })),
-      });
+    if (displayed) {
+      const gwLookup = columnId === displayed.id && columnPoints
+        ? columnPoints
+        : await gameweekPointsByTeam(prisma, {
+            seasonId,
+            gameweekId: displayed.id,
+            teams: teamRefs,
+          });
 
       const prevEntries = leaderboard.map(e => ({
         teamId: e.teamId,
@@ -92,17 +94,14 @@ export class LeaderboardService {
       totalPoints: team.totalPoints,
     }));
 
-    const latestFinished = await prisma.gameweek.findFirst({
-      where: { seasonId, status: 'finished' },
-      orderBy: { number: 'desc' },
-    });
+    const displayed = await findDisplayedGameweek(seasonId);
 
     let movementMap: Record<string, number> = {};
     let gwPointsLookup: Record<string, number> = {};
-    if (latestFinished) {
+    if (displayed) {
       gwPointsLookup = await gameweekPointsByTeam(prisma, {
         seasonId,
-        gameweekId: latestFinished.id,
+        gameweekId: displayed.id,
         teams: allEntries.map((entry) => ({ teamId: entry.teamId, userId: entry.userId })),
       });
 
