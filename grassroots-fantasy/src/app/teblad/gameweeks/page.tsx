@@ -32,6 +32,27 @@ const STATUS_FLOW: Record<string, string> = {
   active: "finished",
 };
 
+interface FreezeSlot {
+  teamId: string;
+  playerId: string;
+  teamName: string;
+  userName: string;
+  playerName: string;
+  position: string;
+  isStarting: boolean;
+  isCaptain: boolean;
+  isViceCaptain: boolean;
+}
+
+interface FreezePlan {
+  ok: boolean;
+  frozen: boolean;
+  reasons: string[];
+  unverified: string[];
+  gameweek: { name: string; number: number; seasonName: string; status: string; deadline: string } | null;
+  slots: FreezeSlot[];
+}
+
 export default function GameweeksPage() {
   const [gameweeks, setGameweeks] = useState<Gameweek[]>([]);
   const [seasons, setSeasons] = useState<SeasonOption[]>([]);
@@ -52,6 +73,10 @@ export default function GameweeksPage() {
     endTime: "23:59",
   });
   const [formError, setFormError] = useState("");
+  const [freezeGw, setFreezeGw] = useState<Gameweek | null>(null);
+  const [freezeLoading, setFreezeLoading] = useState(false);
+  const [freezeError, setFreezeError] = useState("");
+  const [freezePlan, setFreezePlan] = useState<FreezePlan | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -158,6 +183,54 @@ export default function GameweeksPage() {
     }
   }
 
+  async function openFreeze(gw: Gameweek) {
+    setFreezeGw(gw);
+    setFreezePlan(null);
+    setFreezeError("");
+    setFreezeLoading(true);
+    try {
+      const res = await fetch(`/api/admin/gameweeks/${gw.id}/freeze-lineup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: false }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setFreezeError(data.error || "Could not preview the freeze");
+        return;
+      }
+      setFreezePlan(data.data);
+    } catch {
+      setFreezeError("Network error");
+    } finally {
+      setFreezeLoading(false);
+    }
+  }
+
+  async function confirmFreeze() {
+    if (!freezeGw || !freezePlan?.ok) return;
+    setFreezeLoading(true);
+    setFreezeError("");
+    try {
+      const res = await fetch(`/api/admin/gameweeks/${freezeGw.id}/freeze-lineup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setFreezeError(data.error || "Could not freeze squads");
+        return;
+      }
+      setFreezePlan(data.data);
+      if (data.data.frozen) fetchData();
+    } catch {
+      setFreezeError("Network error");
+    } finally {
+      setFreezeLoading(false);
+    }
+  }
+
   async function applyScoring(gw: Gameweek) {
     setScoring(gw.id);
     try {
@@ -235,6 +308,9 @@ export default function GameweeksPage() {
                         <Button variant="ghost" size="sm" onClick={() => openEdit(gw)}>
                           Edit
                         </Button>
+                        <Button variant="ghost" size="sm" onClick={() => openFreeze(gw)}>
+                          Freeze squads
+                        </Button>
                         {STATUS_FLOW[gw.status] && (
                           <Button variant="secondary" size="sm" onClick={() => advanceStatus(gw)}>
                             → {STATUS_FLOW[gw.status]}
@@ -259,6 +335,69 @@ export default function GameweeksPage() {
           )}
         </div>
       </Card>
+
+      <Modal
+        open={freezeGw !== null}
+        onClose={() => { if (!freezeLoading) setFreezeGw(null); }}
+        title="Freeze current squads"
+        description="Copies today's squads onto this gameweek. It does not score and it does not open the next gameweek."
+        size="xl"
+      >
+        <div className="space-y-4 text-sm">
+          {freezeLoading && !freezePlan ? (
+            <Skeleton height={16} width="100%" />
+          ) : null}
+          {freezeError ? <p className="text-red-400">{freezeError}</p> : null}
+          {freezePlan ? (
+            <>
+              <p className="text-surface-300">
+                {freezePlan.gameweek
+                  ? `${freezePlan.gameweek.name} · GW${freezePlan.gameweek.number} · ${freezePlan.gameweek.seasonName} · ${freezePlan.gameweek.status} · deadline ${new Date(freezePlan.gameweek.deadline).toLocaleString()}`
+                  : "Gameweek not found"}
+              </p>
+              {freezePlan.frozen ? (
+                <p className="text-emerald-400">Frozen. Re-save the missed Appearance before opening the next gameweek.</p>
+              ) : null}
+              {freezePlan.reasons.length > 0 ? (
+                <ul className="space-y-1 text-red-400">
+                  {freezePlan.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+                </ul>
+              ) : null}
+              <div>
+                <p className="text-surface-200 font-medium">
+                  {freezePlan.slots.length} players {freezePlan.frozen ? "were" : "would be"} captured
+                </p>
+                <ul className="mt-2 max-h-64 overflow-y-auto space-y-1 text-surface-400">
+                  {freezePlan.slots.map((slot) => (
+                    <li key={`${slot.teamId}-${slot.playerId}`}>
+                      {slot.teamName} ({slot.userName}) — {slot.playerName} {slot.position}{" "}
+                      {slot.isStarting ? "XI" : "bench"}
+                      {slot.isCaptain ? " captain" : ""}
+                      {slot.isViceCaptain ? " vice" : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-surface-200 font-medium">This cannot verify</p>
+                <ul className="mt-2 space-y-1 text-surface-500">
+                  {freezePlan.unverified.map((line) => <li key={line}>{line}</li>)}
+                </ul>
+              </div>
+            </>
+          ) : null}
+          <ModalFooter>
+            <Button variant="ghost" type="button" onClick={() => setFreezeGw(null)} disabled={freezeLoading}>
+              Close
+            </Button>
+            {freezePlan?.ok && !freezePlan.frozen ? (
+              <Button type="button" loading={freezeLoading} onClick={confirmFreeze}>
+                Confirm freeze
+              </Button>
+            ) : null}
+          </ModalFooter>
+        </div>
+      </Modal>
 
       <Modal
         open={modalOpen}

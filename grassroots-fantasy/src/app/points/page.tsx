@@ -3,7 +3,7 @@
 import Link from "next/link"
 
 const scoringRules = [
-  { event: "Appearance", points: "1 pt" },
+  { event: "Appearance", points: "2 pts" },
   { event: "Goal (GK)", points: "10 pts" },
   { event: "Goal (DEF)", points: "8 pts" },
   { event: "Goal (MID)", points: "6 pts" },
@@ -12,7 +12,8 @@ const scoringRules = [
   { event: "Clean Sheet (GK)", points: "5 pts" },
   { event: "Clean Sheet (DEF)", points: "4 pts" },
   { event: "Penalty Save (GK)", points: "5 pts" },
-  { event: "Goal Conceded (GK/DEF)", points: "-2 pts" },
+  { event: "Goal Conceded (GK)", points: "-2 pts" },
+  { event: "Penalty Miss", points: "-2 pts" },
   { event: "Yellow Card", points: "-1 pt" },
   { event: "Red Card", points: "-3 pts" },
   { event: "Own Goal", points: "-2 pts" },
