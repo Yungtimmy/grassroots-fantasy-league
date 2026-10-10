@@ -349,6 +349,8 @@ Rescoring a finished gameweek was reading `FantasyTeamPlayer`, which only holds 
 
 `npm run points:audit` is read-only. The pre-fix stat save overwrote each point row and incremented the team total, so a row's ratio is x1, x2, or x3 from the last save, and stacking is `totalPoints` minus the sum of the rows. It does not build snapshots. It has not been run against a database.
 
+`npm run points:freeze -- --gameweek "Week 1"` previews copying today's squads onto that named gameweek, including one that is already finished. `--confirm` writes the snapshot. The same action is on the admin gameweeks page (dry run, then Confirm freeze). It refuses when a snapshot exists, this deadline has not passed, a later gameweek has opened or passed its deadline, or a squad was saved after this deadline. It cannot prove the lock was on the whole time. Safe order: merge, migrate, freeze, re-save the Appearance, audit, recompute dry run, recompute write, and only then end matches and open the next gameweek. Do not run it against the live database from this environment.
+
 ### 2026-09-11 — Payment guard + fee fix + profile faculty/department
 
 **Done**

@@ -1,6 +1,12 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "./db";
-import { canSnapshotCurrentSquads, liveLineupGameweekId, planSeasonRecompute } from "./lineup-policy";
+import {
+  assessNamedGameweekFreeze,
+  canSnapshotCurrentSquads,
+  liveLineupGameweekId,
+  planSeasonRecompute,
+  type SquadSaveStamp,
+} from "./lineup-policy";
 import {
   DEFAULT_SCORING_RULES,
   attributePoints,
@@ -156,6 +162,178 @@ export async function captureLineupIfLive(gameweekId: string, db: ScoringDb): Pr
 
   await writeCurrentSquads(db, gameweekId, gameweek.seasonId);
   return true;
+}
+
+export type FreezeSlotPreview = {
+  teamId: string;
+  teamName: string;
+  userName: string;
+  playerId: string;
+  playerName: string;
+  position: string;
+  isStarting: boolean;
+  isCaptain: boolean;
+  isViceCaptain: boolean;
+};
+
+export type NamedFreezeResult = {
+  ok: boolean;
+  frozen: boolean;
+  reasons: string[];
+  unverified: readonly string[];
+  gameweek: {
+    id: string;
+    name: string;
+    number: number;
+    seasonName: string;
+    status: string;
+    deadline: string;
+  } | null;
+  slots: FreezeSlotPreview[];
+};
+
+export function namedFreezeLog(result: NamedFreezeResult, confirm: boolean): string {
+  const teams = new Set(result.slots.map((slot) => slot.teamId)).size;
+  const state = result.frozen ? "FROZEN" : !result.ok ? "REFUSED" : "DRY RUN";
+  const why = result.reasons.length > 0 ? ` reasons=${JSON.stringify(result.reasons.join("; "))}` : "";
+  return `[freeze-lineup] ${state} confirm=${confirm} gameweek=${result.gameweek?.name ?? "none"} id=${result.gameweek?.id ?? "none"} teams=${teams} players=${result.slots.length} at=${new Date().toISOString()}${why}`;
+}
+
+/**
+ * Copy current squads onto one named gameweek. Dry run unless confirm is true.
+ * Does not score and does not run when the guard refuses.
+ */
+export async function freezeNamedGameweekSquads(
+  db: ScoringDb,
+  input: { gameweekName?: string; seasonName?: string; targetId?: string; confirm: boolean; now?: Date },
+): Promise<NamedFreezeResult> {
+  const now = input.now ?? new Date();
+  const [seasons, teams] = await Promise.all([
+    db.season.findMany({
+      select: {
+        id: true,
+        name: true,
+        gameweeks: {
+          select: {
+            id: true,
+            number: true,
+            name: true,
+            status: true,
+            deadline: true,
+            lineupFrozenAt: true,
+            _count: { select: { lineups: true } },
+          },
+        },
+      },
+    }),
+    db.fantasyTeam.findMany({
+      select: {
+        id: true,
+        name: true,
+        updatedAt: true,
+        user: { select: { name: true } },
+        league: { select: { seasonId: true } },
+        players: {
+          select: {
+            playerId: true,
+            isCaptain: true,
+            isViceCaptain: true,
+            isStarting: true,
+            position: true,
+            createdAt: true,
+            player: { select: { name: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const gameweeks = seasons.flatMap((season) =>
+    season.gameweeks.map((gameweek) => ({
+      id: gameweek.id,
+      seasonId: season.id,
+      seasonName: season.name,
+      number: gameweek.number,
+      name: gameweek.name,
+      status: gameweek.status,
+      deadline: gameweek.deadline,
+      lineupFrozenAt: gameweek.lineupFrozenAt,
+      lineupCount: gameweek._count.lineups,
+    })),
+  );
+  const squads: SquadSaveStamp[] = teams.map((team) => {
+    const savedAt = team.players.reduce<Date | null>((latest, player) => {
+      if (!latest || player.createdAt > latest) return player.createdAt;
+      return latest;
+    }, null);
+    return {
+      seasonId: team.league.seasonId,
+      teamId: team.id,
+      teamName: team.name,
+      squadSavedAt: savedAt,
+      teamUpdatedAt: team.updatedAt,
+    };
+  });
+
+  const assessment = assessNamedGameweekFreeze({
+    gameweekName: input.gameweekName,
+    seasonName: input.seasonName,
+    targetId: input.targetId,
+    gameweeks,
+    squads,
+    now,
+  });
+  const target = gameweeks.find((gameweek) => gameweek.id === assessment.gameweekId) ?? null;
+  const slots: FreezeSlotPreview[] = target
+    ? teams
+        .filter((team) => team.league.seasonId === target.seasonId)
+        .flatMap((team) =>
+          team.players.map((player) => ({
+            teamId: team.id,
+            teamName: team.name,
+            userName: team.user.name,
+            playerId: player.playerId,
+            playerName: player.player.name,
+            position: player.position,
+            isStarting: player.isStarting,
+            isCaptain: player.isCaptain,
+            isViceCaptain: player.isViceCaptain,
+          })),
+        )
+        .sort((a, b) =>
+          a.teamName.localeCompare(b.teamName)
+          || Number(b.isStarting) - Number(a.isStarting)
+          || a.playerName.localeCompare(b.playerName),
+        )
+    : [];
+
+  const result: NamedFreezeResult = {
+    ok: assessment.ok,
+    frozen: false,
+    reasons: assessment.reasons,
+    unverified: assessment.unverified,
+    gameweek: target
+      ? {
+          id: target.id,
+          name: target.name,
+          number: target.number,
+          seasonName: target.seasonName,
+          status: target.status,
+          deadline: target.deadline.toISOString(),
+        }
+      : null,
+    slots,
+  };
+
+  if (!assessment.ok || !input.confirm || !target) {
+    console.log(namedFreezeLog(result, input.confirm));
+    return result;
+  }
+
+  await writeCurrentSquads(db, target.id, target.seasonId);
+  result.frozen = true;
+  console.log(namedFreezeLog(result, true));
+  return result;
 }
 
 /**
