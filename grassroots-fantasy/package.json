@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/scoring-engine.test.ts src/lib/lineup-policy.test.ts src/lib/points-audit.test.ts",
+    "test": "vitest run && tsx --test src/lib/scoring-engine.test.ts src/lib/lineup-policy.test.ts src/lib/points-audit.test.ts",
     "points:recompute": "tsx scripts/recompute-points.ts",
     "points:audit": "tsx scripts/audit-points.ts",
     "points:freeze": "tsx scripts/freeze-lineup.ts",
@@ -43,6 +43,7 @@
     "prisma": "^5.20.0",
     "tailwindcss": "^3.4.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^5.0.3"
   }
 }

@@ -12,6 +12,7 @@ function RegisterForm() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [error, setError] = useState("");
 
+  const [accessToken, setAccessToken] = useState("");
   const [googleUser, setGoogleUser] = useState<{
     email: string;
     name: string;
@@ -29,7 +30,7 @@ function RegisterForm() {
 
   useEffect(() => {
     supabaseBrowser.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
+      if (!session?.access_token || !session.user.email) {
         router.replace("/oauth/consent");
         return;
       }
@@ -39,6 +40,7 @@ function RegisterForm() {
       const fullName = user.user_metadata?.full_name || user.user_metadata?.name || email.split("@")[0];
       const avatar = user.user_metadata?.avatar_url || "";
 
+      setAccessToken(session.access_token);
       setGoogleUser({ email, name: fullName, avatar });
       setName(fullName);
       setCheckingAuth(false);
@@ -98,15 +100,25 @@ function RegisterForm() {
       return;
     }
 
+    if (!accessToken || !googleUser?.email) {
+      setError("Your Google session expired. Please sign in again.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/auth/register-and-pay", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           name: name.trim(),
           username: username.trim(),
           universityId,
-          email: googleUser?.email,
+          email: googleUser.email,
+          accessToken,
           facultyId: facultyId || undefined,
           departmentId: departmentId || undefined,
         }),
