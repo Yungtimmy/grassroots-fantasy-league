@@ -324,6 +324,9 @@ function MatchCard({ match, compact = false }: { match: Match; compact?: boolean
           )}
           {!isLive && !isFinished && (
             <div className="text-right">
+              {match.status === "postponed" && (
+                <span className="block text-[9px] font-semibold uppercase text-yellow-500">PPD</span>
+              )}
               {match.time && (
                 <span className="text-[10px] font-medium text-surface-400">{match.time}</span>
               )}

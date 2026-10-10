@@ -86,6 +86,49 @@ describe("recompute script", () => {
     assert.deepEqual(plan.recomputeIds, ["gw2"]);
     assert.deepEqual(plan.skipped.map((gameweek) => gameweek.id), ["gw1"]);
   });
+
+  it("rebuilds only the requested gameweek and leaves the others out", () => {
+    const plan = planSeasonRecompute(
+      [
+        { id: "gw1", number: 1, status: "finished", lineupFrozenAt: "2026-10-01T00:00:00.000Z" },
+        { id: "gw2", number: 2, status: "active", lineupFrozenAt: "2026-10-08T00:00:00.000Z" },
+      ],
+      { onlyGameweekId: "gw1" },
+    );
+
+    assert.deepEqual(plan.recomputeIds, ["gw1"]);
+    assert.deepEqual(plan.skipped, []);
+    assert.equal(plan.captureLiveId, null);
+  });
+
+  it("does not capture a different live week when one gameweek is requested", () => {
+    const plan = planSeasonRecompute(
+      [
+        { id: "gw1", number: 1, status: "finished", lineupFrozenAt: null },
+        { id: "gw2", number: 2, status: "active", lineupFrozenAt: null },
+      ],
+      { captureLive: true, onlyGameweekId: "gw1" },
+    );
+
+    assert.deepEqual(plan.recomputeIds, []);
+    assert.equal(plan.captureLiveId, null);
+    assert.deepEqual(plan.skipped.map((gameweek) => gameweek.id), ["gw1"]);
+    assert.equal(plan.skipped[0]?.isLive, false);
+  });
+
+  it("captures the requested week only when that week is the live one", () => {
+    const plan = planSeasonRecompute(
+      [
+        { id: "gw1", number: 1, status: "finished", lineupFrozenAt: "2026-10-01T00:00:00.000Z" },
+        { id: "gw2", number: 2, status: "active", lineupFrozenAt: null },
+      ],
+      { captureLive: true, onlyGameweekId: "gw2" },
+    );
+
+    assert.equal(plan.captureLiveId, "gw2");
+    assert.deepEqual(plan.recomputeIds, ["gw2"]);
+    assert.deepEqual(plan.skipped, []);
+  });
 });
 
 function namedGameweek(partial: Partial<NamedFreezeGameweek> & Pick<NamedFreezeGameweek, "id" | "number" | "status">): NamedFreezeGameweek {
