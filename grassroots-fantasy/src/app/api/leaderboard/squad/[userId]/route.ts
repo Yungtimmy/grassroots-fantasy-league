@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { findDisplayedGameweek } from "@/lib/gameweek";
 import { getCurrentSeason } from "@/lib/league";
 import { teamGameweekPointRows } from "@/lib/scoring";
+import { REBUILT_LINEUP_SOURCE } from "@/lib/squad-rebuild";
 import {
   SQUAD_HIDDEN_MESSAGE,
   SQUAD_UNAVAILABLE_MESSAGE,
@@ -122,7 +123,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: "No squad found" }, { status: 404 });
     }
 
-    let source: "snapshot" | "current" = "current";
+    let source: "snapshot" | "current" | "rebuilt" = "current";
     let slots: RevealedSquadPlayer[];
 
     if (!isOwner) {
@@ -133,7 +134,8 @@ export async function GET(
         where: { gameweekId: gameweek.id, teamId: team.id },
         include: { player: { select: playerSelect } },
       });
-      source = "snapshot";
+      if (lineup.length === 0) return unavailable();
+      source = lineup.some((row) => row.source === REBUILT_LINEUP_SOURCE) ? "rebuilt" : "snapshot";
       slots = lineup.map((row) => toPlayer(row));
     } else {
       slots = team.players.map((row) => toPlayer(row));

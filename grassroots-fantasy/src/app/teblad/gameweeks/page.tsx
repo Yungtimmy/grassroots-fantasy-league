@@ -78,6 +78,35 @@ interface RecomputePlan {
   totals: { before: number; after: number; delta: number; teams: number; teamsChanged: number };
 }
 
+interface RebuildPlayer {
+  playerId: string;
+  playerName: string;
+  position: string;
+  isStarting: boolean;
+  isCaptain: boolean;
+  isViceCaptain: boolean;
+  filledFromCurrentSquad: boolean;
+}
+
+interface RebuildTeam {
+  status: "ready" | "skipped";
+  teamId: string;
+  teamName: string;
+  userName: string;
+  reason: string | null;
+  players: RebuildPlayer[];
+}
+
+interface RebuildPlan {
+  ok: boolean;
+  canWrite: boolean;
+  written: boolean;
+  alreadyFrozen: boolean;
+  reason: string | null;
+  gameweek: { id: string; name: string; number: number; seasonName: string; status: string; endDate: string } | null;
+  teams: RebuildTeam[];
+}
+
 function formatDelta(delta: number): string {
   return delta > 0 ? `+${delta}` : String(delta);
 }
@@ -110,6 +139,10 @@ export default function GameweeksPage() {
   const [recomputeLoading, setRecomputeLoading] = useState(false);
   const [recomputeError, setRecomputeError] = useState("");
   const [recomputePlan, setRecomputePlan] = useState<RecomputePlan | null>(null);
+  const [rebuildGw, setRebuildGw] = useState<Gameweek | null>(null);
+  const [rebuildLoading, setRebuildLoading] = useState(false);
+  const [rebuildError, setRebuildError] = useState("");
+  const [rebuildPlan, setRebuildPlan] = useState<RebuildPlan | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -339,6 +372,53 @@ export default function GameweeksPage() {
     }
   }
 
+  async function openRebuild(gw: Gameweek) {
+    setRebuildGw(gw);
+    setRebuildPlan(null);
+    setRebuildError("");
+    setRebuildLoading(true);
+    try {
+      const res = await fetch(`/api/admin/gameweeks/${gw.id}/rebuild-squads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: false }),
+      });
+      const data = await res.json();
+      if (data.data) setRebuildPlan(data.data);
+      if (!res.ok || !data.success) {
+        setRebuildError(data.error || data.data?.reason || "Could not preview this rebuild");
+      }
+    } catch {
+      setRebuildError("Network error");
+    } finally {
+      setRebuildLoading(false);
+    }
+  }
+
+  async function confirmRebuild() {
+    if (!rebuildGw || !rebuildPlan?.canWrite || rebuildPlan.written) return;
+    setRebuildLoading(true);
+    setRebuildError("");
+    try {
+      const res = await fetch(`/api/admin/gameweeks/${rebuildGw.id}/rebuild-squads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const data = await res.json();
+      if (data.data) setRebuildPlan(data.data);
+      if (!res.ok || !data.success) {
+        setRebuildError(data.error || "Could not rebuild squads");
+        return;
+      }
+      if (data.data?.written) fetchData();
+    } catch {
+      setRebuildError("Network error");
+    } finally {
+      setRebuildLoading(false);
+    }
+  }
+
   async function applyScoring(gw: Gameweek) {
     setScoring(gw.id);
     try {
@@ -423,6 +503,11 @@ export default function GameweeksPage() {
                         <Button variant="ghost" size="sm" onClick={() => openFreeze(gw)}>
                           Freeze squads
                         </Button>
+                        {gw.status === "finished" && !gw.lineupFrozenAt && (
+                          <Button variant="ghost" size="sm" onClick={() => openRebuild(gw)}>
+                            Rebuild squads
+                          </Button>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => openRecompute(gw)}>
                           Recompute points
                         </Button>
@@ -581,6 +666,69 @@ export default function GameweeksPage() {
             {recomputePlan?.ok && !recomputePlan.written ? (
               <Button type="button" loading={recomputeLoading} onClick={confirmRecompute}>
                 Confirm recompute
+              </Button>
+            ) : null}
+          </ModalFooter>
+        </div>
+      </Modal>
+
+      <Modal
+        open={rebuildGw !== null}
+        onClose={() => { if (!rebuildLoading) setRebuildGw(null); }}
+        title="Rebuild squads"
+        description="Dry run for a finished gameweek that was never frozen. Nothing is written until you confirm. An existing snapshot is left as it is."
+        size="xl"
+      >
+        <div className="space-y-4 text-sm">
+          {rebuildLoading && !rebuildPlan ? <Skeleton height={16} width="100%" /> : null}
+          {rebuildError ? <p className="text-red-400">{rebuildError}</p> : null}
+          {rebuildPlan?.reason ? <p className="text-amber-300">{rebuildPlan.reason}</p> : null}
+          {rebuildPlan?.gameweek ? (
+            <p className="text-surface-300">
+              GW{rebuildPlan.gameweek.number} {rebuildPlan.gameweek.name} · {rebuildPlan.gameweek.seasonName} · ended {formatDateTime(rebuildPlan.gameweek.endDate)}
+            </p>
+          ) : null}
+          {rebuildPlan?.written ? (
+            <p className="text-emerald-400">Rebuilt. Skipped teams were not given a squad, and this gameweek is now frozen.</p>
+          ) : null}
+          {rebuildPlan && rebuildPlan.teams.length > 0 ? (
+            <div className="max-h-80 space-y-4 overflow-y-auto">
+              {rebuildPlan.teams.map((team) => (
+                <div key={team.teamId} className="rounded-lg border border-surface-700 px-3 py-2">
+                  <p className="font-medium text-surface-200">
+                    {team.teamName}
+                    <span className="ml-2 font-normal text-surface-500">{team.userName}</span>
+                  </p>
+                  {team.status === "skipped" ? (
+                    <p className="mt-1 text-amber-300">Skipped: {team.reason}</p>
+                  ) : (
+                    <ul className="mt-1 space-y-1 text-surface-400">
+                      {team.players.map((player) => (
+                        <li key={player.playerId}>
+                          {player.playerName} {player.position} {player.isStarting ? "XI" : "bench"}
+                          {player.isCaptain ? " captain" : ""}
+                          {player.isViceCaptain ? " vice" : ""}
+                          {player.filledFromCurrentSquad ? " · filled from current squad" : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {rebuildPlan?.ok && !rebuildPlan.written ? (
+            <p className="text-surface-500">
+              Confirm writes only the ready squads and marks the gameweek frozen. Skipped teams stay unavailable. Running it again will not fill them in and will not overwrite what was written.
+            </p>
+          ) : null}
+          <ModalFooter>
+            <Button variant="ghost" type="button" onClick={() => setRebuildGw(null)} disabled={rebuildLoading}>
+              Close
+            </Button>
+            {rebuildPlan?.canWrite && !rebuildPlan.written ? (
+              <Button type="button" loading={rebuildLoading} onClick={confirmRebuild}>
+                Confirm rebuild
               </Button>
             ) : null}
           </ModalFooter>

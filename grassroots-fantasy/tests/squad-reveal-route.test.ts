@@ -311,6 +311,63 @@ describe("GET /api/leaderboard/squad/[userId]", () => {
     expect(JSON.stringify(body)).not.toContain("Edited Striker");
   });
 
+  it("labels a rebuilt snapshot and still hides the current squad", async () => {
+    prismaMock.gameweek.findMany.mockResolvedValue([
+      gameweek({
+        id: "gw-12",
+        number: 12,
+        name: "Gameweek 12",
+        status: "finished",
+        deadline: new Date(Date.now() - 86_400_000),
+        lineupFrozenAt: new Date(),
+      }),
+      gameweek({
+        id: "gw-13",
+        number: 13,
+        status: "upcoming",
+        deadline: new Date(Date.now() + 86_400_000),
+      }),
+    ]);
+    prismaMock.gameweekLineup.findMany.mockResolvedValue([
+      { ...lockedPlayer, source: "rebuilt" },
+      { ...lockedBench, source: "rebuilt" },
+    ]);
+
+    const res = await call(OTHER_ID);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.data.source).toBe("rebuilt");
+    expect(body.data.gameweekLabel).toBe("Gameweek 12 squad");
+    expect(body.data.players.map((player: { name: string }) => player.name)).toEqual([
+      "Locked Striker",
+      "Locked Midfielder",
+    ]);
+    expect(JSON.stringify(body)).not.toContain("Edited Striker");
+  });
+
+  it("returns not-available when the frozen gameweek has no lineup rows for this team", async () => {
+    prismaMock.gameweek.findMany.mockResolvedValue([
+      gameweek({
+        id: "gw-12",
+        number: 12,
+        status: "finished",
+        deadline: new Date(Date.now() - 86_400_000),
+        lineupFrozenAt: new Date(),
+      }),
+    ]);
+    prismaMock.gameweekLineup.findMany.mockResolvedValue([]);
+
+    const res = await call(OTHER_ID);
+    const body = await res.json();
+
+    expect(res.status).toBe(404);
+    expect(body).toEqual({ success: false, error: "Squad not available for this gameweek" });
+    expect(JSON.stringify(body)).not.toContain("Edited Striker");
+    expect(JSON.stringify(body)).not.toContain("Locked Striker");
+    expect(prismaMock.fantasyPointTransaction.findMany).not.toHaveBeenCalled();
+  });
+
   it("returns not-available with no players when the finished gameweek has no snapshot", async () => {
     prismaMock.gameweek.findMany.mockResolvedValue([
       gameweek({

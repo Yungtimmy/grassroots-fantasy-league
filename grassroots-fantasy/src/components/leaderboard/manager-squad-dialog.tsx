@@ -17,7 +17,7 @@ type RevealedSquad = {
   gameweekNumber: number | null;
   gameweekName: string | null;
   gameweekLabel: string | null;
-  source: "snapshot" | "current";
+  source: "snapshot" | "current" | "rebuilt";
   own: boolean;
   players: RevealedSquadPlayer[];
 };
@@ -107,7 +107,13 @@ export function ManagerSquadDialog({
           ) : null}
           <div className="mb-4 flex items-center justify-between gap-3 text-xs text-gray-400">
             <span>{state.squad.formation}</span>
-            <span>{state.squad.source === "snapshot" ? "Locked lineup" : "Points"}</span>
+            <span>
+              {state.squad.source === "rebuilt"
+                ? "Rebuilt"
+                : state.squad.source === "snapshot"
+                  ? "Locked lineup"
+                  : "Points"}
+            </span>
           </div>
           {state.squad.players.length === 0 ? (
             <p className="py-6 text-center text-sm text-gray-400">No players in this squad.</p>
