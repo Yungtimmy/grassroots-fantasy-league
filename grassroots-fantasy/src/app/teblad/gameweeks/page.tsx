@@ -13,7 +13,7 @@ import {
   fixturesNeedingFinishWarning,
   type FinishWarningFixture,
 } from "@/lib/fixture-admin";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, formatDateTime } from "@/lib/utils";
 
 interface Gameweek {
   id: string;
@@ -24,6 +24,7 @@ interface Gameweek {
   startDate: string;
   endDate: string;
   status: string;
+  lineupFrozenAt: string | null;
 }
 
 interface SeasonOption {
@@ -388,6 +389,7 @@ export default function GameweeksPage() {
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Dates</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Deadline</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Frozen</th>
                   <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-surface-400">Actions</th>
                 </tr>
               </thead>
@@ -409,6 +411,9 @@ export default function GameweeksPage() {
                       >
                         {gw.status}
                       </Badge>
+                    </td>
+                    <td className="px-6 py-3 text-surface-400">
+                      {gw.lineupFrozenAt ? `Frozen at ${formatDateTime(gw.lineupFrozenAt)}` : "not frozen"}
                     </td>
                     <td className="px-6 py-3 text-right">
                       <div className="flex flex-wrap items-center justify-end gap-2">

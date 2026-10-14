@@ -7,22 +7,27 @@ import { findDisplayedGameweek } from "@/lib/gameweek";
 import { getCurrentSeason } from "@/lib/league";
 import { teamGameweekPointRows } from "@/lib/scoring";
 import {
-  SQUAD_REVEAL_MESSAGE,
+  SQUAD_HIDDEN_MESSAGE,
+  SQUAD_UNAVAILABLE_MESSAGE,
   decideSquadReveal,
   orderSquadPlayers,
+  squadGameweekLabel,
   type RevealedSquadPlayer,
 } from "@/lib/squad-reveal";
 
 /**
  * Leaderboard reads are already public: /api/leaderboard/* does not require
  * sign-in. Another manager's squad follows that pattern. Sign-in is still
- * read so the viewer can always open their own squad, including before the
- * deadline, which is how /api/teams already works.
+ * read so the viewer can always open their own squad, which is how /api/teams
+ * already works.
  *
- * The current gameweek comes from findDisplayedGameweek. Query flags such
- * as gameweekId, locked, or reveal are ignored. Another squad is returned
- * only when that gameweek is active and past its deadline. Points use the
- * same gameweek.
+ * The gameweek comes from findDisplayedGameweek. Query flags such as
+ * gameweekId, locked, or reveal are ignored.
+ *
+ * Another squad is refused while that gameweek is active. Between gameweeks,
+ * and after the last one finishes, the response is that finished gameweek's
+ * frozen lineup only. The current squad is never substituted for a missing
+ * snapshot. The signed-in manager still reads their own current squad.
  */
 
 const playerSelect = {
@@ -47,7 +52,11 @@ type SlotRow = {
 };
 
 function hidden() {
-  return NextResponse.json({ success: false, error: SQUAD_REVEAL_MESSAGE }, { status: 403 });
+  return NextResponse.json({ success: false, error: SQUAD_HIDDEN_MESSAGE }, { status: 403 });
+}
+
+function unavailable() {
+  return NextResponse.json({ success: false, error: SQUAD_UNAVAILABLE_MESSAGE }, { status: 404 });
 }
 
 function toPlayer(row: SlotRow): RevealedSquadPlayer {
@@ -88,10 +97,14 @@ export async function GET(
     }
 
     const displayed = await findDisplayedGameweek(season.id);
-    const decision = decideSquadReveal(displayed, new Date());
-    if (!decision.reveal && !isOwner) return hidden();
+    if (!isOwner) {
+      const decision = decideSquadReveal(displayed);
+      if (!decision.reveal) {
+        return decision.reason === "hidden" ? hidden() : unavailable();
+      }
+    }
 
-    const gameweek = decision.gameweek;
+    const gameweek = displayed;
 
     const team = await prisma.fantasyTeam.findFirst({
       where: {
@@ -109,11 +122,13 @@ export async function GET(
       return NextResponse.json({ success: false, error: "No squad found" }, { status: 404 });
     }
 
-    const useSnapshot = Boolean(decision.reveal && gameweek?.lineupFrozenAt);
     let source: "snapshot" | "current" = "current";
     let slots: RevealedSquadPlayer[];
 
-    if (useSnapshot && gameweek) {
+    if (!isOwner) {
+      // Another manager is only reachable here for a finished, frozen gameweek.
+      // Never read team.players: that is the squad being edited for next week.
+      if (!gameweek?.lineupFrozenAt) return unavailable();
       const lineup = await prisma.gameweekLineup.findMany({
         where: { gameweekId: gameweek.id, teamId: team.id },
         include: { player: { select: playerSelect } },
@@ -151,6 +166,7 @@ export async function GET(
         gameweekId: gameweek?.id ?? null,
         gameweekNumber: gameweek?.number ?? null,
         gameweekName: gameweek?.name ?? null,
+        gameweekLabel: gameweek ? squadGameweekLabel(gameweek) : null,
         source,
         own: isOwner,
         players: orderSquadPlayers(slots),

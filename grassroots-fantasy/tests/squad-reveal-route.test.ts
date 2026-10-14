@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { createToken } from "@/lib/auth";
 import { GET } from "@/app/api/leaderboard/squad/[userId]/route";
+import { decideSquadReveal, squadGameweekLabel } from "@/lib/squad-reveal";
 import { cookieJar, prismaMock, resetHarness } from "./harness";
 
 vi.mock("next/headers", async () => {
@@ -82,6 +83,20 @@ const lockedPlayer = {
   },
 };
 
+const lockedBench = {
+  playerId: "p-locked-bench",
+  position: "MID",
+  isCaptain: false,
+  isViceCaptain: true,
+  isStarting: false,
+  player: {
+    id: "p-locked-bench",
+    name: "Locked Midfielder",
+    position: "MID",
+    realTeam: { shortName: "LIV", name: "Liverpool" },
+  },
+};
+
 function teamFor(userId: string) {
   return {
     id: userId === OWNER_ID ? "team-owner" : TEAM_ID,
@@ -103,6 +118,45 @@ async function signIn(userId: string) {
   cookieJar.set("gfl-token", token);
 }
 
+const clientFlags = {
+  gameweekId: "gw-someone-else",
+  locked: "true",
+  reveal: "1",
+  deadline: "2000-01-01T00:00:00.000Z",
+  status: "finished",
+};
+
+describe("decideSquadReveal", () => {
+  it("hides another squad for the whole time a gameweek is active", () => {
+    const active = gameweek({
+      deadline: new Date(Date.now() - 60_000),
+      lineupFrozenAt: new Date(),
+    });
+    expect(decideSquadReveal(active)).toMatchObject({ reveal: false, reason: "hidden" });
+    expect(decideSquadReveal(gameweek({ deadline: new Date(Date.now() + 60_000) }))).toMatchObject({
+      reveal: false,
+      reason: "hidden",
+    });
+  });
+
+  it("reveals only the latest finished gameweek when that week has a snapshot", () => {
+    const finished = gameweek({
+      id: "gw-12",
+      number: 12,
+      status: "finished",
+      lineupFrozenAt: new Date(),
+    });
+    expect(decideSquadReveal(finished)).toEqual({ reveal: true, gameweek: finished });
+    expect(squadGameweekLabel(finished)).toBe("Gameweek 12 squad");
+  });
+
+  it("does not reveal a finished gameweek that was never frozen", () => {
+    const finished = gameweek({ id: "gw-12", number: 12, status: "finished", lineupFrozenAt: null });
+    expect(decideSquadReveal(finished)).toMatchObject({ reveal: false, reason: "unavailable" });
+    expect(decideSquadReveal(null)).toMatchObject({ reveal: false, reason: "unavailable", gameweek: null });
+  });
+});
+
 describe("GET /api/leaderboard/squad/[userId]", () => {
   beforeEach(() => {
     resetHarness();
@@ -116,30 +170,39 @@ describe("GET /api/leaderboard/squad/[userId]", () => {
     prismaMock.fantasyPointTransaction.findMany.mockResolvedValue([
       { playerId: "p-locked", totalPoints: 6 },
       { playerId: "p-locked", totalPoints: 3 },
+      { playerId: "p-locked-bench", totalPoints: 8 },
       { playerId: "p-live", totalPoints: 4 },
       { playerId: "p-bench", totalPoints: 1 },
     ]);
-    prismaMock.gameweekLineup.findMany.mockResolvedValue([lockedPlayer]);
+    prismaMock.gameweekLineup.findMany.mockResolvedValue([lockedPlayer, lockedBench]);
   });
 
-  it("refuses another squad before the deadline and returns no players", async () => {
+  it("refuses another squad while a gameweek is active, even after the deadline", async () => {
     await signIn(OWNER_ID);
     prismaMock.gameweek.findMany.mockResolvedValue([
-      gameweek({ id: "gw-finished", number: 1, status: "finished", deadline: new Date(Date.now() - 86_400_000), lineupFrozenAt: new Date() }),
-      gameweek({ deadline: new Date(Date.now() + 86_400_000), lineupFrozenAt: new Date() }),
+      gameweek({
+        id: "gw-12",
+        number: 12,
+        name: "Gameweek 12",
+        status: "finished",
+        deadline: new Date(Date.now() - 86_400_000),
+        lineupFrozenAt: new Date(),
+      }),
+      gameweek({
+        id: "gw-13",
+        number: 13,
+        name: "Gameweek 13",
+        status: "active",
+        deadline: new Date(Date.now() - 60_000),
+        lineupFrozenAt: new Date(),
+      }),
     ]);
 
-    const res = await call(OTHER_ID, {
-      gameweekId: "gw-finished",
-      locked: "true",
-      reveal: "1",
-      deadline: "2000-01-01T00:00:00.000Z",
-      status: "active",
-    });
+    const res = await call(OTHER_ID, clientFlags);
     const body = await res.json();
 
     expect(res.status).toBe(403);
-    expect(body).toEqual({ success: false, error: "Squads reveal at the deadline" });
+    expect(body).toEqual({ success: false, error: "Squads are hidden while a gameweek is live" });
     expect(JSON.stringify(body)).not.toContain("Locked Striker");
     expect(JSON.stringify(body)).not.toContain("Edited Striker");
     expect(body.players).toBeUndefined();
@@ -151,119 +214,153 @@ describe("GET /api/leaderboard/squad/[userId]", () => {
     expect(prismaMock.gameweek.findMany).toHaveBeenCalledWith({ where: { seasonId: SEASON_ID } });
   });
 
-  it("allows another squad after the deadline and prefers the frozen lineup", async () => {
+  it("between gameweeks returns the last finished snapshot, not the current squad", async () => {
     prismaMock.gameweek.findMany.mockResolvedValue([
       gameweek({
-        deadline: new Date(Date.now() - 60_000),
-        lineupFrozenAt: new Date(Date.now() - 30_000),
+        id: "gw-11",
+        number: 11,
+        name: "Gameweek 11",
+        status: "finished",
+        deadline: new Date(Date.now() - 14 * 86_400_000),
+        lineupFrozenAt: new Date(Date.now() - 13 * 86_400_000),
+      }),
+      gameweek({
+        id: "gw-12",
+        number: 12,
+        name: "Week 12",
+        status: "finished",
+        deadline: new Date(Date.now() - 86_400_000),
+        lineupFrozenAt: new Date(Date.now() - 80_000_000),
+      }),
+      gameweek({
+        id: "gw-13",
+        number: 13,
+        name: "Gameweek 13",
+        status: "upcoming",
+        deadline: new Date(Date.now() + 86_400_000),
+        lineupFrozenAt: null,
       }),
     ]);
 
-    const res = await call(OTHER_ID, { gameweekId: "gw-someone-else", reveal: "0" });
+    const res = await call(OTHER_ID, clientFlags);
     const body = await res.json();
 
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.data.source).toBe("snapshot");
-    expect(body.data.players.map((player: { name: string }) => player.name)).toEqual(["Locked Striker"]);
-    expect(body.data.players[0]).toMatchObject({
-      isCaptain: true,
-      isViceCaptain: false,
-      isStarting: true,
-      points: 9,
-      club: "MCI",
-    });
-    expect(JSON.stringify(body)).not.toContain("Edited Striker");
-    expect(prismaMock.fantasyPointTransaction.findMany).toHaveBeenCalledWith({
-      where: {
-        gameweekId: "gw-active",
-        OR: [{ teamId: TEAM_ID }, { teamId: null, userId: OTHER_ID }],
-      },
-      select: { playerId: true, totalPoints: true },
-    });
-  });
-
-  it("falls back to the current squad only when the locked gameweek has no snapshot", async () => {
-    prismaMock.gameweek.findMany.mockResolvedValue([
-      gameweek({ deadline: new Date(Date.now() - 60_000), lineupFrozenAt: null }),
-    ]);
-
-    const res = await call(OTHER_ID);
-    const body = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(body.data.source).toBe("current");
+    expect(body.data.gameweekId).toBe("gw-12");
+    expect(body.data.gameweekNumber).toBe(12);
+    expect(body.data.gameweekLabel).toBe("Gameweek 12 squad");
     expect(body.data.players.map((player: { name: string; isStarting: boolean; points: number }) => ({
       name: player.name,
       isStarting: player.isStarting,
       points: player.points,
     }))).toEqual([
-      { name: "Edited Striker", isStarting: true, points: 4 },
-      { name: "Edited Midfielder", isStarting: false, points: 1 },
+      { name: "Locked Striker", isStarting: true, points: 9 },
+      { name: "Locked Midfielder", isStarting: false, points: 8 },
     ]);
-    expect(body.data.players.find((player: { name: string }) => player.name === "Edited Midfielder").isViceCaptain).toBe(true);
-    expect(prismaMock.gameweekLineup.findMany).not.toHaveBeenCalled();
+    expect(body.data.players[0]).toMatchObject({ isCaptain: true, isViceCaptain: false, club: "MCI" });
+    expect(body.data.players[1]).toMatchObject({ isCaptain: false, isViceCaptain: true, club: "LIV" });
+    expect(JSON.stringify(body)).not.toContain("Edited Striker");
+    expect(JSON.stringify(body)).not.toContain("Edited Midfielder");
+    expect(prismaMock.gameweekLineup.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { gameweekId: "gw-12", teamId: TEAM_ID },
+      }),
+    );
+    expect(prismaMock.fantasyPointTransaction.findMany).toHaveBeenCalledWith({
+      where: {
+        gameweekId: "gw-12",
+        OR: [{ teamId: TEAM_ID }, { teamId: null, userId: OTHER_ID }],
+      },
+      select: { playerId: true, totalPoints: true },
+    });
+    expect(prismaMock.gameweek.findFirst).not.toHaveBeenCalled();
   });
 
-  it("shows a substitute's stored 1x points on the bench", async () => {
+  it("after the final gameweek shows that frozen squad with bench points at 1x", async () => {
     prismaMock.gameweek.findMany.mockResolvedValue([
       gameweek({
-        deadline: new Date(Date.now() - 60_000),
-        lineupFrozenAt: new Date(Date.now() - 30_000),
+        id: "gw-12",
+        number: 12,
+        name: "Gameweek 12",
+        status: "finished",
+        deadline: new Date(Date.now() - 86_400_000),
+        lineupFrozenAt: new Date(Date.now() - 80_000_000),
       }),
     ]);
-    prismaMock.gameweekLineup.findMany.mockResolvedValue([lockedPlayer, liveBench]);
     prismaMock.fantasyPointTransaction.findMany.mockResolvedValue([
       { playerId: "p-locked", totalPoints: 12 },
-      { playerId: "p-bench", totalPoints: 8 },
+      { playerId: "p-locked-bench", totalPoints: 8 },
     ]);
 
     const res = await call(OTHER_ID);
     const body = await res.json();
     const starter = body.data.players.find((player: { playerId: string }) => player.playerId === "p-locked");
-    const bench = body.data.players.find((player: { playerId: string }) => player.playerId === "p-bench");
+    const bench = body.data.players.find((player: { playerId: string }) => player.playerId === "p-locked-bench");
 
     expect(res.status).toBe(200);
-    expect(starter).toMatchObject({ isStarting: true, points: 12 });
+    expect(body.data.gameweekLabel).toBe("Gameweek 12 squad");
+    expect(body.data.source).toBe("snapshot");
+    expect(starter).toMatchObject({ isStarting: true, isCaptain: true, points: 12 });
     expect(bench).toMatchObject({
       isStarting: false,
       isViceCaptain: true,
       points: 8,
     });
+    expect(JSON.stringify(body)).not.toContain("Edited Striker");
   });
 
-  it("refuses when no gameweek is active, even if the client names one", async () => {
-    await signIn(OWNER_ID);
+  it("returns not-available with no players when the finished gameweek has no snapshot", async () => {
     prismaMock.gameweek.findMany.mockResolvedValue([
       gameweek({
-        id: "gw-upcoming",
+        id: "gw-11",
+        number: 11,
+        status: "finished",
+        deadline: new Date(Date.now() - 14 * 86_400_000),
+        lineupFrozenAt: new Date(),
+      }),
+      gameweek({
+        id: "gw-12",
+        number: 12,
+        name: "Gameweek 12",
+        status: "finished",
+        deadline: new Date(Date.now() - 86_400_000),
+        lineupFrozenAt: null,
+      }),
+      gameweek({
+        id: "gw-13",
+        number: 13,
         status: "upcoming",
         deadline: new Date(Date.now() + 86_400_000),
       }),
-      gameweek({
-        id: "gw-finished",
-        number: 1,
-        status: "finished",
-        deadline: new Date(Date.now() - 86_400_000),
-        lineupFrozenAt: new Date(),
-      }),
     ]);
 
-    const res = await call(OTHER_ID, { gameweekId: "gw-finished", status: "active", locked: "true" });
+    const res = await call(OTHER_ID, { gameweekId: "gw-11", locked: "true", reveal: "1" });
     const body = await res.json();
 
-    expect(res.status).toBe(403);
-    expect(body).toEqual({ success: false, error: "Squads reveal at the deadline" });
+    expect(res.status).toBe(404);
+    expect(body).toEqual({ success: false, error: "Squad not available for this gameweek" });
     expect(body.players).toBeUndefined();
+    expect(body.data).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain("Locked Striker");
+    expect(JSON.stringify(body)).not.toContain("Edited Striker");
+    expect(JSON.stringify(body)).not.toContain("Edited Midfielder");
     expect(prismaMock.fantasyTeam.findFirst).not.toHaveBeenCalled();
     expect(prismaMock.gameweekLineup.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.fantasyPointTransaction.findMany).not.toHaveBeenCalled();
     expect(prismaMock.gameweek.findFirst).not.toHaveBeenCalled();
   });
 
-  it("always allows a manager to see their own squad before the deadline", async () => {
+  it("always allows a manager to see their own squad while a gameweek is live", async () => {
     await signIn(OWNER_ID);
     prismaMock.gameweek.findMany.mockResolvedValue([
-      gameweek({ id: "gw-active", number: 2, deadline: new Date(Date.now() + 86_400_000) }),
+      gameweek({
+        id: "gw-active",
+        number: 2,
+        deadline: new Date(Date.now() + 86_400_000),
+        lineupFrozenAt: new Date(),
+      }),
       gameweek({ id: "gw-next", number: 3, status: "upcoming", deadline: new Date(Date.now() + 172_800_000) }),
     ]);
 
@@ -274,6 +371,7 @@ describe("GET /api/leaderboard/squad/[userId]", () => {
     expect(body.success).toBe(true);
     expect(body.data.own).toBe(true);
     expect(body.data.source).toBe("current");
+    expect(body.data.gameweekLabel).toBe("Gameweek 2 squad");
     expect(body.data.players.map((player: { name: string }) => player.name)).toEqual([
       "Edited Striker",
       "Edited Midfielder",
@@ -316,7 +414,13 @@ describe("GET /api/leaderboard/squad/[userId]", () => {
     expect(res.status).toBe(200);
     expect(body.data.own).toBe(true);
     expect(body.data.gameweekId).toBe("gw-old");
+    expect(body.data.gameweekLabel).toBe("Gameweek 1 squad");
     expect(body.data.source).toBe("current");
+    expect(body.data.players.map((player: { name: string }) => player.name)).toEqual([
+      "Edited Striker",
+      "Edited Midfielder",
+    ]);
+    expect(prismaMock.gameweekLineup.findMany).not.toHaveBeenCalled();
     expect(prismaMock.gameweek.findFirst).not.toHaveBeenCalled();
     expect(prismaMock.fantasyPointTransaction.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
