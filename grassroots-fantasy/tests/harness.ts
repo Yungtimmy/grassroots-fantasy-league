@@ -35,6 +35,7 @@ export const prismaMock = {
   realPlayer: model(),
   $transaction: vi.fn(async (ops: unknown) => {
     if (Array.isArray(ops)) return Promise.all(ops);
+    if (typeof ops === "function") return ops(prismaMock);
     return ops;
   }),
 };

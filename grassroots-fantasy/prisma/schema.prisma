@@ -298,6 +298,8 @@ model GameweekLineup {
   isViceCaptain Boolean     @default(false) @map("is_vice_captain")
   isStarting    Boolean     @default(true) @map("is_starting")
   position      String
+  /// frozen = captured squad. rebuilt = assembled from points for a week that was never frozen.
+  source        String      @default("frozen")
   createdAt     DateTime    @default(now()) @map("created_at")
   gameweek      Gameweek    @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
   team          FantasyTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)

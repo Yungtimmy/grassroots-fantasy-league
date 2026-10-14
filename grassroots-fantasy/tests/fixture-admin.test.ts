@@ -116,6 +116,9 @@ describe("finish warning", () => {
     expect(source).toContain("fixturesNeedingFinishWarning");
     expect(source).toContain("window.confirm");
     expect(source).toContain("status: next");
+    expect(source).toContain("lineupFrozenAt");
+    expect(source).toContain("not frozen");
+    expect(source).toContain("Frozen at ");
   });
 
   it("is offered on the fixtures admin page", () => {

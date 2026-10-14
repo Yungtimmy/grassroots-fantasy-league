@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/modal";
-import { SQUAD_REVEAL_MESSAGE, type RevealedSquadPlayer } from "@/lib/squad-reveal";
+import { SQUAD_HIDDEN_MESSAGE, type RevealedSquadPlayer } from "@/lib/squad-reveal";
 
 export type SquadManager = {
   userId: string;
@@ -16,7 +16,8 @@ type RevealedSquad = {
   formation: string;
   gameweekNumber: number | null;
   gameweekName: string | null;
-  source: "snapshot" | "current";
+  gameweekLabel: string | null;
+  source: "snapshot" | "current" | "rebuilt";
   own: boolean;
   players: RevealedSquadPlayer[];
 };
@@ -56,7 +57,7 @@ export function ManagerSquadDialog({
         if (!res.ok || !json?.success || !json.data) {
           setState({
             status: "hidden",
-            message: typeof json?.error === "string" ? json.error : SQUAD_REVEAL_MESSAGE,
+            message: typeof json?.error === "string" ? json.error : SQUAD_HIDDEN_MESSAGE,
           });
           return;
         }
@@ -78,8 +79,9 @@ export function ManagerSquadDialog({
   const starters = state.status === "ready" ? state.squad.players.filter((player) => player.isStarting) : [];
   const bench = state.status === "ready" ? state.squad.players.filter((player) => !player.isStarting) : [];
   const gameweekLabel =
-    state.status === "ready" && state.squad.gameweekNumber != null
-      ? state.squad.gameweekName || `Gameweek ${state.squad.gameweekNumber}`
+    state.status === "ready"
+      ? state.squad.gameweekLabel
+        || (state.squad.gameweekNumber != null ? `Gameweek ${state.squad.gameweekNumber} squad` : null)
       : null;
 
   return (
@@ -100,11 +102,17 @@ export function ManagerSquadDialog({
         </p>
       ) : (
         <div>
+          {gameweekLabel ? (
+            <h2 className="mb-3 text-sm font-semibold text-white">{gameweekLabel}</h2>
+          ) : null}
           <div className="mb-4 flex items-center justify-between gap-3 text-xs text-gray-400">
             <span>{state.squad.formation}</span>
             <span>
-              {gameweekLabel ? `${gameweekLabel} points` : "Points"}
-              {state.squad.source === "snapshot" ? " · Locked lineup" : ""}
+              {state.squad.source === "rebuilt"
+                ? "Rebuilt"
+                : state.squad.source === "snapshot"
+                  ? "Locked lineup"
+                  : "Points"}
             </span>
           </div>
           {state.squad.players.length === 0 ? (
