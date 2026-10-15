@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 interface GameweekOption {
   id: string;
@@ -43,7 +43,13 @@ export default function GameweekStatsPage() {
     fetch("/api/admin/gameweek-stats")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) setGameweeks(d.data.gameweeks ?? []);
+        if (!d.success) return;
+        const weeks: GameweekOption[] = d.data.gameweeks ?? [];
+        setGameweeks(weeks);
+        const defaultId = typeof d.data.defaultGameweekId === "string" ? d.data.defaultGameweekId : "";
+        if (defaultId && weeks.some((gw) => gw.id === defaultId)) {
+          setSelectedGw(defaultId);
+        }
       })
       .catch(() => {})
       .finally(() => setLoadingGws(false));
@@ -68,6 +74,8 @@ export default function GameweekStatsPage() {
       .finally(() => setLoadingStats(false));
   }, [selectedGw]);
 
+  const selectedWeek = gameweeks.find((gw) => gw.id === selectedGw);
+
   return (
     <div className="space-y-6">
       <div>
@@ -76,26 +84,54 @@ export default function GameweekStatsPage() {
       </div>
 
       <Card>
-        <div className="p-4">
+        <div className="min-w-0 p-4">
           {loadingGws ? (
             <Skeleton height={16} width={200} />
+          ) : gameweeks.length === 0 ? (
+            <p className="text-sm text-surface-400">No gameweeks in the active season.</p>
           ) : (
-            <Select
-              label="Select Gameweek"
-              value={selectedGw}
-              onChange={setSelectedGw}
-              options={gameweeks.map((gw) => ({
-                label: `GW${gw.number} - ${gw.name} (${gw.status})`,
-                value: gw.id,
-              }))}
-              placeholder="Choose a gameweek"
-            />
+            <div className="min-w-0">
+              <p id="gw-stats-selector-label" className="mb-2 text-sm font-medium text-surface-300">
+                Select Gameweek
+              </p>
+              <div
+                role="group"
+                aria-labelledby="gw-stats-selector-label"
+                className="flex max-w-full flex-wrap gap-2"
+              >
+                {gameweeks.map((gw) => {
+                  const selected = gw.id === selectedGw;
+                  return (
+                    <button
+                      key={gw.id}
+                      type="button"
+                      aria-pressed={selected}
+                      title={`${gw.name} (${gw.status})`}
+                      onClick={() => setSelectedGw(gw.id)}
+                      className={cn(
+                        "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                        selected
+                          ? "border-brand-500 bg-brand-500 text-white"
+                          : "border-surface-600 bg-surface-900 text-surface-200 hover:border-surface-500"
+                      )}
+                    >
+                      GW{gw.number}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedWeek && (
+                <p className="mt-3 text-xs text-surface-400">
+                  {selectedWeek.name} ({selectedWeek.status})
+                </p>
+              )}
+            </div>
           )}
         </div>
       </Card>
 
       {loadingStats ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-2">
           {[1, 2].map((i) => (
             <Card key={i}>
               <div className="p-6 space-y-3">
@@ -107,8 +143,8 @@ export default function GameweekStatsPage() {
           ))}
         </div>
       ) : selectedGw ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
+        <div className="grid min-w-0 gap-6 lg:grid-cols-2">
+          <Card className="min-w-0">
             <div className="p-4 border-b border-surface-700/50">
               <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Most Selected Players</h2>
             </div>
@@ -142,7 +178,7 @@ export default function GameweekStatsPage() {
             </div>
           </Card>
 
-          <Card>
+          <Card className="min-w-0">
             <div className="p-4 border-b border-surface-700/50">
               <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Top Scorers</h2>
             </div>

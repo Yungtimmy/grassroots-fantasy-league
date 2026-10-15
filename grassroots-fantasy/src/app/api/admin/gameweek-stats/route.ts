@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { selectDisplayedGameweek } from "@/lib/gameweek";
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,14 +14,20 @@ export async function GET(request: NextRequest) {
     
     if (!gameweekId) {
       const season = await prisma.season.findFirst({ where: { status: "active" }, orderBy: { year: "desc" } });
-      if (!season) return NextResponse.json({ success: true, data: { gameweeks: [] } });
+      if (!season) {
+        return NextResponse.json({ success: true, data: { gameweeks: [], defaultGameweekId: null } });
+      }
       
       const gameweeks = await prisma.gameweek.findMany({
         where: { seasonId: season.id },
         orderBy: { number: "asc" },
         select: { id: true, number: true, name: true, status: true },
       });
-      return NextResponse.json({ success: true, data: { gameweeks } });
+      const displayed = selectDisplayedGameweek(gameweeks);
+      return NextResponse.json({
+        success: true,
+        data: { gameweeks, defaultGameweekId: displayed?.id ?? null },
+      });
     }
     
     const mostSelected = await prisma.fantasyTeamPlayer.groupBy({
