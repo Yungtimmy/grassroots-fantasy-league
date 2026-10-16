@@ -111,6 +111,79 @@ function formatDelta(delta: number): string {
   return delta > 0 ? `+${delta}` : String(delta);
 }
 
+function gameweekStatusVariant(status: string): "active" | "success" | "info" {
+  if (status === "active") return "active";
+  if (status === "finished") return "success";
+  return "info";
+}
+
+function frozenLabel(gameweek: Gameweek): string {
+  return gameweek.lineupFrozenAt
+    ? `Frozen at ${formatDateTime(gameweek.lineupFrozenAt)}`
+    : "not frozen";
+}
+
+function GameweekActions({
+  gw,
+  scoringId,
+  align = "end",
+  onEdit,
+  onFreeze,
+  onRebuild,
+  onRecompute,
+  onAdvance,
+  onScore,
+}: {
+  gw: Gameweek;
+  scoringId: string | null;
+  align?: "start" | "end";
+  onEdit: (gw: Gameweek) => void;
+  onFreeze: (gw: Gameweek) => void;
+  onRebuild: (gw: Gameweek) => void;
+  onRecompute: (gw: Gameweek) => void;
+  onAdvance: (gw: Gameweek) => void;
+  onScore: (gw: Gameweek) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-2",
+        align === "end" ? "justify-end" : "justify-start",
+      )}
+    >
+      <Button variant="ghost" size="sm" onClick={() => onEdit(gw)}>
+        Edit
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => onFreeze(gw)}>
+        Freeze squads
+      </Button>
+      {gw.status === "finished" && !gw.lineupFrozenAt && (
+        <Button variant="ghost" size="sm" onClick={() => onRebuild(gw)}>
+          Rebuild squads
+        </Button>
+      )}
+      <Button variant="ghost" size="sm" onClick={() => onRecompute(gw)}>
+        Recompute points
+      </Button>
+      {STATUS_FLOW[gw.status] && (
+        <Button variant="secondary" size="sm" onClick={() => onAdvance(gw)}>
+          → {STATUS_FLOW[gw.status]}
+        </Button>
+      )}
+      {gw.status === "finished" && (
+        <Button
+          variant="primary"
+          size="sm"
+          loading={scoringId === gw.id}
+          onClick={() => onScore(gw)}
+        >
+          Apply Scoring
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export default function GameweeksPage() {
   const [gameweeks, setGameweeks] = useState<Gameweek[]>([]);
   const [seasons, setSeasons] = useState<SeasonOption[]>([]);
@@ -442,7 +515,7 @@ export default function GameweeksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Gameweeks</h1>
           <p className="text-surface-400 mt-1">Manage weekly fixtures and scoring</p>
@@ -451,89 +524,111 @@ export default function GameweeksPage() {
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="p-6 space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} height={16} width="100%" />
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} height={16} width="100%" />
+            ))}
+          </div>
+        ) : gameweeks.length === 0 ? (
+          <p className="p-6 text-surface-400 text-sm">No gameweeks found.</p>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-surface-700/50">
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">#</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Dates</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Deadline</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Frozen</th>
+                    <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-surface-400">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gameweeks.map((gw) => (
+                    <tr key={gw.id} className="border-b border-surface-700/30 hover:bg-surface-700/20">
+                      <td className="px-6 py-3 text-surface-300 font-medium">{gw.number}</td>
+                      <td className="px-6 py-3 font-medium text-surface-200">{gw.name}</td>
+                      <td className="px-6 py-3 text-surface-400">
+                        {formatDate(gw.startDate)} — {formatDate(gw.endDate)}
+                      </td>
+                      <td className="px-6 py-3 text-surface-400">{formatDate(gw.deadline)}</td>
+                      <td className="px-6 py-3">
+                        <Badge variant={gameweekStatusVariant(gw.status)} dot>
+                          {gw.status}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-3 text-surface-400">{frozenLabel(gw)}</td>
+                      <td className="px-6 py-3 text-right">
+                        <GameweekActions
+                          gw={gw}
+                          scoringId={scoring}
+                          onEdit={openEdit}
+                          onFreeze={openFreeze}
+                          onRebuild={openRebuild}
+                          onRecompute={openRecompute}
+                          onAdvance={advanceStatus}
+                          onScore={applyScoring}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="space-y-3 p-3 md:hidden">
+              {gameweeks.map((gw) => (
+                <article
+                  key={gw.id}
+                  className="space-y-3 rounded-xl border border-surface-700/50 bg-surface-900/40 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-surface-500">
+                        GW{gw.number}
+                      </p>
+                      <h2 className="break-words text-base font-semibold text-white">{gw.name}</h2>
+                    </div>
+                    <Badge variant={gameweekStatusVariant(gw.status)} dot className="shrink-0">
+                      {gw.status}
+                    </Badge>
+                  </div>
+                  <dl className="space-y-2 text-sm">
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wider text-surface-500">Deadline</dt>
+                      <dd className="mt-0.5 text-surface-200">{formatDate(gw.deadline)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wider text-surface-500">Frozen</dt>
+                      <dd className="mt-0.5 break-words text-surface-300">{frozenLabel(gw)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wider text-surface-500">Dates</dt>
+                      <dd className="mt-0.5 break-words text-surface-300">
+                        {formatDate(gw.startDate)} — {formatDate(gw.endDate)}
+                      </dd>
+                    </div>
+                  </dl>
+                  <GameweekActions
+                    gw={gw}
+                    scoringId={scoring}
+                    align="start"
+                    onEdit={openEdit}
+                    onFreeze={openFreeze}
+                    onRebuild={openRebuild}
+                    onRecompute={openRecompute}
+                    onAdvance={advanceStatus}
+                    onScore={applyScoring}
+                  />
+                </article>
               ))}
             </div>
-          ) : gameweeks.length === 0 ? (
-            <p className="p-6 text-surface-400 text-sm">No gameweeks found.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-surface-700/50">
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">#</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Dates</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Deadline</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-400">Frozen</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-surface-400">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gameweeks.map((gw) => (
-                  <tr key={gw.id} className="border-b border-surface-700/30 hover:bg-surface-700/20">
-                    <td className="px-6 py-3 text-surface-300 font-medium">{gw.number}</td>
-                    <td className="px-6 py-3 font-medium text-surface-200">{gw.name}</td>
-                    <td className="px-6 py-3 text-surface-400">
-                      {formatDate(gw.startDate)} — {formatDate(gw.endDate)}
-                    </td>
-                    <td className="px-6 py-3 text-surface-400">{formatDate(gw.deadline)}</td>
-                    <td className="px-6 py-3">
-                      <Badge
-                        variant={
-                          gw.status === "active" ? "active" : gw.status === "finished" ? "success" : "info"
-                        }
-                        dot
-                      >
-                        {gw.status}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-3 text-surface-400">
-                      {gw.lineupFrozenAt ? `Frozen at ${formatDateTime(gw.lineupFrozenAt)}` : "not frozen"}
-                    </td>
-                    <td className="px-6 py-3 text-right">
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(gw)}>
-                          Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openFreeze(gw)}>
-                          Freeze squads
-                        </Button>
-                        {gw.status === "finished" && !gw.lineupFrozenAt && (
-                          <Button variant="ghost" size="sm" onClick={() => openRebuild(gw)}>
-                            Rebuild squads
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={() => openRecompute(gw)}>
-                          Recompute points
-                        </Button>
-                        {STATUS_FLOW[gw.status] && (
-                          <Button variant="secondary" size="sm" onClick={() => advanceStatus(gw)}>
-                            → {STATUS_FLOW[gw.status]}
-                          </Button>
-                        )}
-                        {gw.status === "finished" && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            loading={scoring === gw.id}
-                            onClick={() => applyScoring(gw)}
-                          >
-                            Apply Scoring
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+          </>
+        )}
       </Card>
 
       <Modal
